@@ -187,10 +187,18 @@ function isObjectValue(value: UntrustedValue): value is UntrustedValue & object 
   return typeof value === "object" && value !== null;
 }
 
+// Per-session record of the pages/warnings JSON last sent to the model. These
+// arrays usually repeat byte-for-byte across a session's calls, so the summary
+// substitutes an unchanged marker whenever the bytes match.
+type EmissionTracker = Map<string, { pages?: string; warnings?: string }>;
+
 // The summary uses one documented vocabulary (snake_case duration_ms included)
 // but omits optional fields when empty. These results become model context, so
 // repeating nulls and empty arrays on every successful call is real token cost.
-export async function contentForResult(result) {
+export async function contentForResult(
+  result,
+  options: { session?: string; tracker?: EmissionTracker } = {},
+) {
   const imagePaths = new Set(piImageArtifacts(result).map((image) => image.path));
   const files = (result.artifacts || [])
     .filter((artifact) => artifact.path && !imagePaths.has(artifact.path))
@@ -215,16 +223,29 @@ export async function contentForResult(result) {
   // Screenshots are returned as image content below, not as paths. Other
   // files (downloads, spilled output) are listed here.
   if (files.length) summary.files = files;
-  if (Array.isArray(result.pages) && result.pages.length)
-    summary.pages = result.pages;
+  const repeated = (key: "pages" | "warnings", value: unknown[]): boolean => {
+    const { session, tracker } = options;
+    if (!tracker || session == null) return false;
+    const json = JSON.stringify(value);
+    const entry = tracker.get(session);
+    if (entry?.[key] === json) return true;
+    tracker.set(session, { ...entry, [key]: json });
+    return false;
+  };
+  if (Array.isArray(result.pages) && result.pages.length) {
+    if (repeated("pages", result.pages)) summary.pages_unchanged = true;
+    else summary.pages = result.pages;
+  }
   if (Array.isArray(result.challenges) && result.challenges.length)
     summary.challenges = result.challenges;
   // Deeper site/provider packs matching the open pages; read the `path` with
   // your file tool before improvising site-specific behavior.
   if (Array.isArray(result.skills) && result.skills.length)
     summary.skills = result.skills;
-  if (Array.isArray(result.warnings) && result.warnings.length)
-    summary.warnings = result.warnings;
+  if (Array.isArray(result.warnings) && result.warnings.length) {
+    if (repeated("warnings", result.warnings)) summary.warnings_unchanged = true;
+    else summary.warnings = result.warnings;
+  }
   if (result.webagents) summary.webagents = result.webagents;
   if (result.ui) summary.ui = result.ui;
   if (result.durationMs != null) summary.duration_ms = result.durationMs;
@@ -434,6 +455,7 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
   // over MCP the host's loop is opaque, so the boundary is each tool call:
   // notes go viewer-ward before a run, typed guidance rides back on results.
   let liveViewActive = false;
+  const emittedContext: EmissionTracker = new Map();
   const drainViewerChat = async () => {
     if (!liveViewActive) return [];
     try {
@@ -519,7 +541,10 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
         if (name === "browser_login" && withLogin) {
           const result = await browser.fillCredential(loginOptionsFromArgs(args));
           const chat = await drainViewerChat();
-          const content = await contentForResult(result);
+          const content = await contentForResult(result, {
+            session: String(args.session || "default"),
+            tracker: emittedContext,
+          });
           if (chat.length) content.push(viewerChatBlock(chat));
           return { content };
         }
@@ -543,8 +568,9 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
           const code = starting
             ? `return recording.${action}(${JSON.stringify(options)});`
             : `return recording.${action}();`;
-          const result = await browser.run(code, { session: String(args.session || "default") });
-          const content = await contentForResult(result);
+          const session = String(args.session || "default");
+          const result = await browser.run(code, { session });
+          const content = await contentForResult(result, { session, tracker: emittedContext });
           const chat = await drainViewerChat();
           if (chat.length) content.push(viewerChatBlock(chat));
           return { content };
@@ -575,7 +601,10 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
               options,
             );
             const chat = await drainViewerChat();
-            const content = await contentForResult(result);
+            const content = await contentForResult(result, {
+              session: options.session,
+              tracker: emittedContext,
+            });
             if (chat.length) content.push(viewerChatBlock(chat));
             return { content };
           }
@@ -612,7 +641,10 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
               : `return controls.batch(${encode(operations)}, ${encode(batchOptions)});`;
           const result = await browser.run(code, options);
           const chat = await drainViewerChat();
-          const content = await contentForResult(result);
+          const content = await contentForResult(result, {
+            session: options.session,
+            tracker: emittedContext,
+          });
           if (chat.length) content.push(viewerChatBlock(chat));
           return { content };
         }
@@ -643,7 +675,10 @@ function createMcpHandlers({ browser, downloadPolicy, liveView = liveViewFromEnv
         }
         const result = await browser.run(String(args.code || ""), options);
         const chat = await drainViewerChat();
-        const content = await contentForResult(result);
+        const content = await contentForResult(result, {
+          session: options.session,
+          tracker: emittedContext,
+        });
         if (chat.length) content.push(viewerChatBlock(chat));
         return { content };
       } catch (error) {

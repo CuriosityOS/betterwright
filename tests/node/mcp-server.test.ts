@@ -573,6 +573,96 @@ test("contentForResult carries a synthesized compact UI directory", async () => 
   assert.equal(JSON.parse(content.text).ui.tool, "browser_batch");
 });
 
+test("MCP suppresses byte-identical pages and warnings on consecutive results", async () => {
+  const makeResult = () => ({
+    ok: true,
+    pages: [{ url: "https://example.com", title: "Example" }],
+    warnings: ["Software WebGL is deprecated"],
+  });
+  const results = [makeResult(), makeResult()];
+  const handlers = _createMcpHandlersForTest({
+    browser: { vault: false, async run() { return results.shift(); } },
+    downloadPolicy: "deny",
+  });
+  const call = () =>
+    handlers.callTool({
+      params: { name: "browser", arguments: { code: "return 1", session: "main" } },
+    });
+  const first = JSON.parse((await call()).content[0].text);
+  assert.deepEqual(first.pages, makeResult().pages);
+  assert.deepEqual(first.warnings, makeResult().warnings);
+  const second = JSON.parse((await call()).content[0].text);
+  assert.equal(Object.hasOwn(second, "pages"), false);
+  assert.equal(Object.hasOwn(second, "warnings"), false);
+  assert.equal(second.pages_unchanged, true);
+  assert.equal(second.warnings_unchanged, true);
+});
+
+test("MCP resumes full pages and warnings emission after a change", async () => {
+  const results = [
+    { ok: true, pages: [{ url: "https://a.example" }], warnings: ["one"] },
+    { ok: true, pages: [{ url: "https://b.example" }], warnings: ["two"] },
+    { ok: true, pages: [{ url: "https://b.example" }], warnings: ["two"] },
+  ];
+  const handlers = _createMcpHandlersForTest({
+    browser: { vault: false, async run() { return results.shift(); } },
+    downloadPolicy: "deny",
+  });
+  const call = () =>
+    handlers.callTool({
+      params: { name: "browser", arguments: { code: "return 1", session: "main" } },
+    });
+  await call();
+  const changed = JSON.parse((await call()).content[0].text);
+  assert.deepEqual(changed.pages, [{ url: "https://b.example" }]);
+  assert.deepEqual(changed.warnings, ["two"]);
+  assert.equal(Object.hasOwn(changed, "pages_unchanged"), false);
+  assert.equal(Object.hasOwn(changed, "warnings_unchanged"), false);
+  const settled = JSON.parse((await call()).content[0].text);
+  assert.equal(settled.pages_unchanged, true);
+  assert.equal(settled.warnings_unchanged, true);
+});
+
+test("MCP result compaction tracks sessions independently", async () => {
+  const makeResult = () => ({
+    ok: true,
+    pages: [{ url: "https://example.com" }],
+    warnings: ["one"],
+  });
+  const handlers = _createMcpHandlersForTest({
+    browser: { vault: false, async run() { return makeResult(); } },
+    downloadPolicy: "deny",
+  });
+  const call = (session) =>
+    handlers.callTool({
+      params: { name: "browser", arguments: { code: "return 1", session } },
+    });
+  const firstA = JSON.parse((await call("a")).content[0].text);
+  const firstB = JSON.parse((await call("b")).content[0].text);
+  assert.deepEqual(firstA.pages, makeResult().pages);
+  assert.deepEqual(firstB.pages, makeResult().pages);
+  assert.deepEqual(firstB.warnings, makeResult().warnings);
+  const secondA = JSON.parse((await call("a")).content[0].text);
+  const secondB = JSON.parse((await call("b")).content[0].text);
+  assert.equal(secondA.pages_unchanged, true);
+  assert.equal(secondB.pages_unchanged, true);
+});
+
+test("contentForResult without a tracker always emits full values", async () => {
+  const makeResult = () => ({
+    ok: true,
+    pages: [{ url: "https://example.com" }],
+    warnings: ["one"],
+  });
+  const [first] = await contentForResult(makeResult());
+  const [second] = await contentForResult(makeResult());
+  assert.equal(second.text, first.text);
+  const summary = JSON.parse(second.text);
+  assert.deepEqual(summary.pages, [{ url: "https://example.com" }]);
+  assert.deepEqual(summary.warnings, ["one"]);
+  assert.equal(Object.hasOwn(summary, "pages_unchanged"), false);
+});
+
 test("liveViewFromEnv defaults to LAN bind and disabled remote exposure", () => {
   assert.deepEqual(liveViewFromEnv({}, {}), {
     enabled: false,
