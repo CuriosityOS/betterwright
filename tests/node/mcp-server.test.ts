@@ -456,9 +456,9 @@ test("the advertised MCP tool list stays inside its context budget", async () =>
   assert.match(text("browser"), /addInitScript before goto/);
   assert.match(text("browser"), /setContent/);
   assert.match(text("browser"), /host fixture/);
-  // Challenge limits are safety rules, not advice.
+  // Challenge limits are safety rules, not advice. Solving mechanics are
+  // delivered just in time on the challenge report's advice field instead.
   assert.match(text("browser"), /three distinct challenge types/);
-  assert.match(text("browser"), /Replacement photo grids are the same stage/);
   assert.match(text("browser"), /Never duplicate a submission, purchase, or message/);
   assert.match(text("browser"), /webagents\.discover\(\)/);
   assert.match(text("browser"), /webagents\.batch\(\)/);
