@@ -24,7 +24,16 @@ function artifactImagePath(artifact) {
   if (!path.isAbsolute(candidate) || !mimeType) return null;
   const kind = String(artifact?.kind || "");
   if (!isMedia && !SCREENSHOT_KINDS.has(kind)) return null;
-  return { path: candidate, mimeType, kind };
+  return { path: candidate, mimeType, kind, inline: inlineImagePath(artifact) };
+}
+
+// The downscaled model-facing companion of a proof screenshot, when the worker
+// wrote one. Validated like any other artifact path before it is trusted.
+function inlineImagePath(artifact) {
+  const candidate = String(artifact?.inlinePath || "");
+  const mimeType = IMAGE_MIME_TYPES.get(path.extname(candidate).toLowerCase());
+  if (!path.isAbsolute(candidate) || !mimeType) return null;
+  return { path: candidate, mimeType };
 }
 
 function dedupedImages(result) {
@@ -41,7 +50,11 @@ function dedupedImages(result) {
 
 /** Return safe, local image artifacts that Pi can receive as vision input. */
 export function piImageArtifacts(result) {
-  return dedupedImages(result).map((image) => ({ path: image.path, mimeType: image.mimeType }));
+  return dedupedImages(result).map((image) =>
+    image.inline
+      ? { path: image.inline.path, mimeType: image.inline.mimeType }
+      : { path: image.path, mimeType: image.mimeType },
+  );
 }
 
 /** Select the screenshot that best represents the browser step in a trace. */

@@ -75,6 +75,13 @@ function firstPngPixel(filePath: string) {
   return [first[0], first[1], first[2], colorType === 6 ? first[3] : 255];
 }
 
+function pngDimensions(filePath: string) {
+  const png = fs.readFileSync(filePath);
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(png.subarray(12, 16).toString("ascii"), "IHDR");
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
 function assertRgbaClose(actual: number[], expected: number[], tolerance = 2) {
   assert.equal(actual.length, expected.length);
   for (const [index, value] of actual.entries()) {
@@ -2142,6 +2149,40 @@ test("screenshots encode at CSS scale without changing page identity", opts, asy
     assert.equal(image.readUInt32BE(16), result.result.viewport.width);
     assert.equal(image.readUInt32BE(20), result.result.viewport.height);
     assert.ok(result.result.viewport.devicePixelRatio >= 1);
+  } finally {
+    await bw.close();
+  }
+});
+
+test("proof screenshots ship a downscaled inline companion", opts, async () => {
+  const bw = new BetterWright({ home: tempHome(), headless: true });
+  try {
+    const result = await bw.run(`
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.setContent('<main style="width:100vw;height:100vh;background:linear-gradient(45deg,#369,#963)"></main>');
+      const proof = await screenshot({kind: 'proof', name: 'inline-proof.png'});
+      const question = await screenshot({kind: 'question', name: 'inline-question.png'});
+      await page.setViewportSize({ width: 800, height: 600 });
+      const small = await screenshot({kind: 'proof', name: 'inline-small.png'});
+      return { proof, question, small };
+    `);
+    assert.equal(result.ok, true, result.error);
+    const { proof, question, small } = result.result;
+
+    assert.deepEqual(pngDimensions(proof.path), { width: 1280, height: 720 });
+    assert.equal(proof.inlinePath, `${proof.path}.inline.png`);
+    assert.deepEqual(pngDimensions(proof.inlinePath), { width: 960, height: 540 });
+    assert.ok(fs.statSync(proof.inlinePath).size > 0);
+
+    assert.equal(question.inlinePath, undefined);
+    assert.deepEqual(pngDimensions(question.path), { width: 1280, height: 720 });
+
+    assert.equal(small.inlinePath, undefined);
+    assert.deepEqual(pngDimensions(small.path), { width: 800, height: 600 });
+
+    const proofArtifact = result.artifacts.find((artifact) => artifact.kind === "proof");
+    assert.equal(proofArtifact.inlinePath, proof.inlinePath);
+    assert.equal(result.artifacts.some((artifact) => artifact.path === proof.inlinePath), false);
   } finally {
     await bw.close();
   }

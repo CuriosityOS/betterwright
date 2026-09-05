@@ -202,6 +202,9 @@ const DEFAULT_DOWNLOAD_LIMIT = 50 * 1024 * 1024;
 const DEFAULT_SCREENSHOT_LIMIT = 10 * 1024 * 1024;
 const DEFAULT_SCREENSHOT_PIXEL_LIMIT = 40_000_000;
 const DEFAULT_RECORDING_LIMIT = 50 * 1024 * 1024;
+// Long-side cap for the model-facing companion of a proof screenshot. The disk
+// artifact keeps full fidelity; only the inline copy shrinks.
+const INLINE_SCREENSHOT_MAX_EDGE = 960;
 
 type RecordingOwner = { handle: RecordingHandle; page: Page; path: string };
 type SessionRecording =
@@ -1424,6 +1427,50 @@ async function captureScreenshot(
         uncropped,
       );
     }
+  }
+}
+
+// Proof screenshots go to the model inline on every call, where image tokens
+// scale with pixel dimensions. Write a downscaled companion next to the
+// full-fidelity artifact so the inline copy costs less; any failure skips the
+// companion and the model falls back to the full artifact.
+async function writeInlineScreenshotCompanion(page, session, file) {
+  try {
+    const source = fs.readFileSync(file);
+    const mime = /\.jpe?g$/i.test(file) ? "image/jpeg" : "image/png";
+    const dataUrl = await page.evaluate(
+      async ({ b64, mime, maxEdge }) => {
+        const image = new Image();
+        image.src = `data:${mime};base64,${b64}`;
+        await image.decode();
+        const longSide = Math.max(image.naturalWidth, image.naturalHeight);
+        if (!longSide || longSide <= maxEdge) return null;
+        const scale = maxEdge / longSide;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext("2d");
+        if (!context) return null;
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      },
+      { b64: source.toString("base64"), mime, maxEdge: INLINE_SCREENSHOT_MAX_EDGE },
+    );
+    const prefix = "data:image/png;base64,";
+    if (!isString(dataUrl) || !dataUrl.startsWith(prefix)) return null;
+    const content = Buffer.from(dataUrl.slice(prefix.length), "base64");
+    if (!content.length) return null;
+    const inlinePath = `${file}.inline.png`;
+    writeBoundedArtifact(
+      session,
+      inlinePath,
+      content,
+      configuredLimit(launchConfig.maxScreenshotBytes, DEFAULT_SCREENSHOT_LIMIT),
+      "Inline screenshot",
+    );
+    return inlinePath;
+  } catch {
+    return null;
   }
 }
 
@@ -4791,6 +4838,7 @@ interface ScreenshotArtifact {
   path: string;
   media: string;
   annotations?: number;
+  inlinePath?: string;
 }
 
 function buildSandbox(session, consoleMessages, execution) {
@@ -4936,6 +4984,10 @@ function buildSandbox(session, consoleMessages, execution) {
       media: `MEDIA:${file}`,
     };
     if (annotations !== undefined) artifact.annotations = annotations;
+    if (kind === "proof") {
+      const inlinePath = await writeInlineScreenshotCompanion(page, session, file);
+      if (inlinePath) artifact.inlinePath = inlinePath;
+    }
     session.artifacts.push(artifact);
     if (kind === "question") session.awaitingAnswerSince = Date.now();
     return artifact;

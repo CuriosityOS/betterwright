@@ -4,6 +4,7 @@ export interface BetterWrightArtifactLike {
   kind?: UntrustedValue;
   media?: UntrustedValue;
   path?: UntrustedValue;
+  inlinePath?: UntrustedValue;
   [key: string]: UntrustedValue;
 }
 

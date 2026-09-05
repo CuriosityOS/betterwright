@@ -118,6 +118,71 @@ test("MCP recording returns worker failure details", async () => {
   assert.deepEqual(JSON.parse(response.content[0].text), { ok: false, error: "FFmpeg is unavailable" });
 });
 
+test("MCP inlines the companion bytes of a proof screenshot, never the full path", async () => {
+  const dir = makeTempDir("betterwright-mcp-");
+  const full = path.join(dir, "proof.png");
+  const inline = `${full}.inline.png`;
+  fs.writeFileSync(full, "full fidelity bytes");
+  fs.writeFileSync(inline, "inline bytes");
+  const handlers = _createMcpHandlersForTest({
+    browser: {
+      vault: false,
+      async run() {
+        return {
+          ok: true,
+          artifacts: [
+            { kind: "proof", path: full, media: `MEDIA:${full}`, inlinePath: inline },
+          ],
+        };
+      },
+    },
+    downloadPolicy: "deny",
+  });
+  const response = await handlers.callTool({
+    params: { name: "browser", arguments: { code: "return 1" } },
+  });
+  assert.equal(response.isError, undefined, response.content[0].text);
+  const summary = JSON.parse(response.content[0].text);
+  assert.equal(summary.ok, true);
+  assert.equal(summary.files, undefined);
+  assert.deepEqual(response.content.slice(1), [
+    {
+      type: "image",
+      data: Buffer.from("inline bytes").toString("base64"),
+      mimeType: "image/png",
+    },
+  ]);
+});
+
+test("MCP inlines the full proof screenshot when no companion was written", async () => {
+  const dir = makeTempDir("betterwright-mcp-");
+  const full = path.join(dir, "proof.png");
+  fs.writeFileSync(full, "full fidelity bytes");
+  const handlers = _createMcpHandlersForTest({
+    browser: {
+      vault: false,
+      async run() {
+        return {
+          ok: true,
+          artifacts: [{ kind: "proof", path: full, media: `MEDIA:${full}` }],
+        };
+      },
+    },
+    downloadPolicy: "deny",
+  });
+  const response = await handlers.callTool({
+    params: { name: "browser", arguments: { code: "return 1" } },
+  });
+  assert.equal(response.isError, undefined, response.content[0].text);
+  assert.deepEqual(response.content.slice(1), [
+    {
+      type: "image",
+      data: Buffer.from("full fidelity bytes").toString("base64"),
+      mimeType: "image/png",
+    },
+  ]);
+});
+
 test("MCP advertises and dispatches browser_login when a vault is available", async () => {
   const calls = [];
   const handlers = _createMcpHandlersForTest({

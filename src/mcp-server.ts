@@ -201,7 +201,12 @@ export async function contentForResult(
 ) {
   const imagePaths = new Set(piImageArtifacts(result).map((image) => image.path));
   const files = (result.artifacts || [])
-    .filter((artifact) => artifact.path && !imagePaths.has(artifact.path))
+    .filter(
+      (artifact) =>
+        artifact.path &&
+        !imagePaths.has(artifact.path) &&
+        !imagePaths.has(String(artifact.inlinePath || "")),
+    )
     .map((artifact) => {
       const file = { kind: artifact.kind, path: artifact.path };
       if (artifact.kind === "recording" && artifact.mimeType) return { ...file, mimeType: artifact.mimeType };
