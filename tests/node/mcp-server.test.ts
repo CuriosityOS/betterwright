@@ -638,6 +638,180 @@ test("contentForResult carries a synthesized compact UI directory", async () => 
   assert.equal(JSON.parse(content.text).ui.tool, "browser_batch");
 });
 
+// The MCP layer renders action directories as one numbered text line per row;
+// the worker's own result keeps the JSON object. Any row shape the renderer
+// does not recognize fails safe: the whole directory stays JSON.
+test("contentForResult renders action directories as numbered lines", async () => {
+  const [content] = await contentForResult({
+    ok: true,
+    result: "opened",
+    ui: {
+      protocol: "betterwright-ui/1",
+      tool: "browser_batch",
+      controls: [
+        {
+          target: { role: "combobox", name: "Connection", exact: true },
+          actions: ["select", "read"],
+          value: "All",
+          options: [["All", "All", true], ["USB-C", "USB-C", false], ["HDMI", "HDMI", false]],
+        },
+        {
+          target: { label: "Maximum price ($)", exact: true },
+          actions: ["fill", "read"],
+          value: "500",
+        },
+        {
+          target: { label: "In stock only", exact: true },
+          actions: ["check", "read"],
+          value: "on",
+          checked: false,
+        },
+      ],
+      truncated: false,
+    },
+  });
+  assert.equal(
+    JSON.parse(content.text).ui,
+    [
+      '1. combobox "Connection" value="All" options[All*|USB-C|HDMI] select,read',
+      '2. label "Maximum price ($)" value="500" fill,read',
+      '3. label "In stock only" unchecked check,read',
+      '{"protocol":"betterwright-ui/1","tool":"browser_batch","truncated":false}',
+    ].join("\n"),
+  );
+});
+
+test("contentForResult renders option, state, disabled, and frame row parts in order", async () => {
+  const [content] = await contentForResult({
+    ok: true,
+    result: "opened",
+    ui: {
+      controls: [
+        {
+          target: { role: "combobox", name: "Size", exact: true },
+          actions: ["select", "read"],
+          value: "10",
+          options: [["Ten", "10", true], ["Twenty", "20", false]],
+          disabled: true,
+        },
+        {
+          target: { role: "checkbox", name: "Wrap", exact: true },
+          actions: ["check", "read"],
+          value: "yes",
+          checked: true,
+        },
+        {
+          target: { role: "button", name: "Pay", exact: true, frameUrlIncludes: "payments.example" },
+          actions: ["click", "read"],
+        },
+      ],
+    },
+  });
+  assert.equal(
+    JSON.parse(content.text).ui,
+    [
+      '1. combobox "Size" value="10" options[10=Ten*|20=Twenty] disabled select,read',
+      // A checkable row's value is the form-submission value; only state shows.
+      '2. checkbox "Wrap" checked check,read',
+      '3. button "Pay" f:"payments.example" click,read',
+    ].join("\n"),
+  );
+});
+
+test("contentForResult escapes quotes, newlines, and option delimiters", async () => {
+  const [content] = await contentForResult({
+    ok: true,
+    result: "opened",
+    ui: {
+      controls: [
+        {
+          target: { role: "button", name: 'Say "hi"\nthen stop', exact: true },
+          actions: ["click", "read"],
+        },
+        {
+          target: { role: "combobox", name: "Pick", exact: true },
+          actions: ["select", "read"],
+          options: [["a|b", "a|b", false], ["star*", "star*", true], ["eq", "x=y", false]],
+        },
+      ],
+    },
+  });
+  assert.equal(
+    JSON.parse(content.text).ui,
+    [
+      '1. button "Say \\"hi\\"\\nthen stop" click,read',
+      '2. combobox "Pick" options["a|b"|"star*"*|"x=y"=eq] select,read',
+    ].join("\n"),
+  );
+});
+
+test("contentForResult leaves non-conforming directories as JSON", async () => {
+  const cases: [string, object][] = [
+    ["empty controls", { protocol: "betterwright-ui/1", controls: [] }],
+    ["unknown row field", {
+      controls: [{ target: { role: "button", name: "Go", exact: true }, actions: ["click"], context: "nav" }],
+    }],
+    ["unknown target keyset", {
+      controls: [{ target: { placeholder: "Search", exact: true }, actions: ["fill", "read"] }],
+    }],
+    ["non-exact target", {
+      controls: [{ target: { role: "button", name: "Go", exact: false }, actions: ["click"] }],
+    }],
+    ["role-only target", {
+      controls: [{ target: { role: "button", exact: true }, actions: ["click"] }],
+    }],
+    ["numbered target", {
+      controls: [{ target: { role: "link", name: "Next", exact: true, nth: 1 }, actions: ["click", "read"] }],
+    }],
+    ["non-boolean checked", {
+      controls: [{ target: { role: "checkbox", name: "Wrap", exact: true }, actions: ["check", "read"], checked: "yes" }],
+    }],
+  ];
+  for (const [name, ui] of cases) {
+    const [content] = await contentForResult({ ok: true, result: "opened", ui });
+    assert.deepEqual(JSON.parse(content.text).ui, ui, name);
+  }
+});
+
+test("contentForResult compacts a nested batch receipt's directory without mutating the worker result", async () => {
+  const directory = {
+    controls: [
+      { target: { role: "textbox", name: "City", exact: true }, actions: ["fill", "read"], value: "Oslo" },
+    ],
+    truncated: true,
+  };
+  const receipt = { batch: { protocol: "ui-batch/1", pageUpdated: true }, ui: directory };
+  const [content] = await contentForResult({ ok: true, result: receipt });
+  const presented = JSON.parse(content.text).result;
+  assert.equal(presented.ui, '1. textbox "City" value="Oslo" fill,read\n{"truncated":true}');
+  assert.deepEqual(presented.batch, receipt.batch);
+  // The worker's object keeps its identity and JSON shape.
+  assert.equal(receipt.ui, directory);
+  assert.deepEqual(directory.controls[0], {
+    target: { role: "textbox", name: "City", exact: true },
+    actions: ["fill", "read"],
+    value: "Oslo",
+  });
+});
+
+test("contentForResult compacts a directory returned directly as the result", async () => {
+  const directory = {
+    protocol: "betterwright-ui/1",
+    tool: "browser_batch",
+    controls: [
+      { target: { label: "Search", exact: true }, actions: ["fill", "read"] },
+    ],
+    evidence: [],
+    truncated: false,
+  };
+  const [content] = await contentForResult({ ok: true, result: directory });
+  assert.equal(
+    JSON.parse(content.text).result,
+    '1. label "Search" fill,read\n{"protocol":"betterwright-ui/1","tool":"browser_batch","evidence":[],"truncated":false}',
+  );
+  assert.ok(Array.isArray(directory.controls));
+});
+
 test("MCP suppresses byte-identical pages and warnings on consecutive results", async () => {
   const makeResult = () => ({
     ok: true,

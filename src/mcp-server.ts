@@ -65,7 +65,13 @@ import { importOptionalPeer } from "./optional-peer.js";
 import { piImageArtifacts, piImageContent } from "./pi.js";
 import { resolveProfileName } from "./profile-name.js";
 import { mcpLoginInputSchema, mcpRunInputSchema } from "./tool-schemas.js";
-import { isString, type UntrustedValue } from "./untrusted-value.js";
+import {
+  isRecord,
+  isString,
+  type UntrustedValue,
+  untrustedEntries,
+  untrustedField,
+} from "./untrusted-value.js";
 
 const require = createRequire(import.meta.url);
 
@@ -195,6 +201,135 @@ type EmissionTracker = Map<string, { pages?: string; warnings?: string }>;
 // The summary uses one documented vocabulary (snake_case duration_ms included)
 // but omits optional fields when empty. These results become model context, so
 // repeating nulls and empty arrays on every successful call is real token cost.
+// --- Compact UI action-directory rendering --------------------------------
+// Action directories repeat in every batch receipt and are re-billed on every
+// later model call, so the MCP layer renders a detected directory as one
+// numbered text line per row instead of JSON. Detection is structural (a
+// controls array of target+actions rows) and the transform fails safe: any
+// row or target form outside what the worker emits leaves the whole directory
+// as untouched JSON, so no information is ever dropped. Worker objects are
+// never mutated; a nested receipt is shallow-copied before its ui property is
+// replaced.
+const DIRECTORY_ROW_KEYS = new Set([
+  "target",
+  "actions",
+  "value",
+  "checked",
+  "disabled",
+  "options",
+]);
+
+function looksLikeActionDirectory(value: UntrustedValue): boolean {
+  if (!isRecord(value)) return false;
+  const controls = untrustedField(value, "controls");
+  if (!Array.isArray(controls) || !controls.length) return false;
+  return controls
+    .slice(0, 3)
+    .every(
+      (row) =>
+        isRecord(row) &&
+        isRecord(untrustedField(row, "target")) &&
+        Array.isArray(untrustedField(row, "actions")),
+    );
+}
+
+// Option tokens join with `|` inside brackets, so a token containing a
+// delimiter, quote, or control character is JSON string-quoted to keep the
+// line machine-splittable.
+function directoryOptionToken(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: a raw control character would break the one-line-per-row format
+  return /["|\]=*\x00-\x1f]/.test(text) ? JSON.stringify(text) : text;
+}
+
+// One row → `N. role|label "name" [value=".."] [checked|unchecked]
+// [options[a*|v=label]] [disabled] [f:"frame"] action,action`, or null when
+// anything falls outside the emitted forms.
+function renderActionDirectoryRow(row: UntrustedValue, index: number): string | null {
+  if (!isRecord(row)) return null;
+  for (const [key] of untrustedEntries(row)) {
+    if (!DIRECTORY_ROW_KEYS.has(key)) return null;
+  }
+  const target = untrustedField(row, "target");
+  const actions = untrustedField(row, "actions");
+  if (!isRecord(target) || !Array.isArray(actions) || !actions.length) return null;
+  if (actions.some((action) => !isString(action) || !/^[^,\s]+$/.test(action))) return null;
+  const targetKeys = new Set(untrustedEntries(target).map(([key]) => key));
+  let frame;
+  if (targetKeys.delete("frameUrlIncludes")) {
+    const frameValue = untrustedField(target, "frameUrlIncludes");
+    if (!isString(frameValue)) return null;
+    frame = frameValue;
+  }
+  const keyset = [...targetKeys].sort().join(" ");
+  let kind: UntrustedValue;
+  let name: UntrustedValue;
+  if (keyset === "exact name role") {
+    kind = untrustedField(target, "role");
+    name = untrustedField(target, "name");
+  } else if (keyset === "exact label") {
+    kind = "label";
+    name = untrustedField(target, "label");
+  } else {
+    return null;
+  }
+  if (untrustedField(target, "exact") !== true) return null;
+  if (!isString(kind) || !/^\S+$/.test(kind) || !isString(name)) return null;
+  const parts = [`${index}. ${kind} ${JSON.stringify(name)}`];
+  const value = untrustedField(row, "value");
+  const checked = untrustedField(row, "checked");
+  if (value !== undefined) {
+    if (!isString(value)) return null;
+    // A checkable row's value is the form-submission value, which no batch
+    // action consumes; the checked token carries its state instead.
+    if (checked === undefined) parts.push(`value=${JSON.stringify(value)}`);
+  }
+  if (checked === true) parts.push("checked");
+  else if (checked === false) parts.push("unchecked");
+  else if (checked !== undefined) return null;
+  const optionsValue = untrustedField(row, "options");
+  if (optionsValue !== undefined) {
+    if (!Array.isArray(optionsValue)) return null;
+    const options = optionsValue.map((option) => {
+      if (!Array.isArray(option) || option.length > 3) return null;
+      const [label, optionValue, selected] = option;
+      if (!isString(label) || !isString(optionValue)) return null;
+      const token = optionValue === label
+        ? directoryOptionToken(label)
+        : `${directoryOptionToken(optionValue)}=${directoryOptionToken(label)}`;
+      return selected ? `${token}*` : token;
+    });
+    if (options.includes(null)) return null;
+    parts.push(`options[${options.join("|")}]`);
+  }
+  const disabled = untrustedField(row, "disabled");
+  if (disabled !== undefined) {
+    if (disabled !== true) return null;
+    parts.push("disabled");
+  }
+  if (frame !== undefined) parts.push(`f:${JSON.stringify(frame)}`);
+  parts.push(actions.join(","));
+  return parts.join(" ");
+}
+
+function renderActionDirectory(directory: UntrustedValue): string | null {
+  const controls = untrustedField(directory, "controls");
+  if (!Array.isArray(controls)) return null;
+  const lines = controls.map((row, index) => renderActionDirectoryRow(row, index + 1));
+  if (lines.includes(null)) return null;
+  const siblings = Object.fromEntries(
+    untrustedEntries(directory).filter(([key]) => key !== "controls"),
+  );
+  if (Object.keys(siblings).length) lines.push(JSON.stringify(siblings));
+  return lines.join("\n");
+}
+
+// The string rendering when value is a well-formed action directory, the
+// identical reference otherwise.
+function compactActionDirectory(value: UntrustedValue): UntrustedValue {
+  if (!looksLikeActionDirectory(value)) return value;
+  return renderActionDirectory(value) ?? value;
+}
+
 export async function contentForResult(
   result,
   options: { session?: string; tracker?: EmissionTracker } = {},
@@ -220,7 +355,17 @@ export async function contentForResult(
       )
     : (result.pendingCredential ?? null);
   const summary: any = { ok: result.ok };
-  if (result.result !== undefined) summary.result = result.result;
+  if (result.result !== undefined) {
+    let presented = compactActionDirectory(result.result);
+    if (presented === result.result && isRecord(result.result)) {
+      const nestedUi = untrustedField(result.result, "ui");
+      if (nestedUi !== undefined) {
+        const ui = compactActionDirectory(nestedUi);
+        if (ui !== nestedUi) presented = { ...result.result, ui };
+      }
+    }
+    summary.result = presented;
+  }
   if (result.error != null) summary.error = result.error;
   if (pendingCredential != null) summary.pendingCredential = pendingCredential;
   if (Array.isArray(result.console) && result.console.length)
@@ -252,7 +397,7 @@ export async function contentForResult(
     else summary.warnings = result.warnings;
   }
   if (result.webagents) summary.webagents = result.webagents;
-  if (result.ui) summary.ui = result.ui;
+  if (result.ui) summary.ui = compactActionDirectory(result.ui);
   if (result.durationMs != null) summary.duration_ms = result.durationMs;
   return [
     { type: "text", text: JSON.stringify(summary) },
@@ -265,7 +410,7 @@ Plan then batch: browser_batch {url} returns result.webagents or result.ui. Run 
 snapshot({interactive: true}) reads unknown UIs (missing targets; never one call per click); page.locator('aria-ref=eN') acts; snapshot({ref}) scopes; snapshot({diff: true}) verifies. Put screenshot({kind: 'proof'}) inside the final verifying call.
 Challenge: keep page and follow the report's solving guidance. Max three distinct challenge types; rejection = stop/alternate/handoff. Verify cleared; replay only if idempotent/provably incomplete. Never duplicate a submission, purchase, or message.`;
 
-const BROWSER_BATCH_DESCRIPTION = `Open with {url}; result.ui is its action directory. Default for ordinary forms: copy targets; batch known and later-revealed controls (they auto-wait). Mutations/proof return fresh controls/evidence; if state is proved, stop. Target: ref, role (+ name), label, text, placeholder, testId, or css; optional exact/nth/frame. Mutating batches require allowWrites=true. Task-supplied passwords need allowPasswords=true; stored ones use browser_login. Final mutation must end in read/readUrl with a non-empty expected value; read verifies only its target. proof=true only there. Missing target: snapshot. Ambiguity fails.`;
+const BROWSER_BATCH_DESCRIPTION = `Open with {url}; result.ui is its action directory. Rows: N. role|label "name" [value=] [checked|unchecked] [options[a*|v=label]] [disabled] [f:"frame"] actions; target: {role,name,exact:true}|{label,exact:true} (+frameUrlIncludes for f:). Default for ordinary forms: batch known and later-revealed controls. Mutations return fresh rows; stop when proved. Target: ref, role (+ name), label, text, placeholder, testId, css; +exact/nth/frame. Mutating batches require allowWrites=true. Task-supplied passwords need allowPasswords=true; stored ones use browser_login. Final mutation must end in read/readUrl with a non-empty expected value; read verifies only its target. proof=true only there. Missing target: snapshot. Ambiguity fails.`;
 
 const BROWSER_BATCH_INPUT_SCHEMA = {
   type: "object",
