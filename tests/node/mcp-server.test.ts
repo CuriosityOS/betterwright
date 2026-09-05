@@ -624,6 +624,37 @@ test("contentForResult carries a discovered WebAgents directory", async () => {
   });
 });
 
+// A null result alongside console output means the call logged where it
+// should have returned; the hint points at the console data so the model
+// reuses it instead of re-running the same read.
+test("contentForResult hints when a call logs but returns null", async () => {
+  const [hinted] = await contentForResult({
+    ok: true,
+    result: null,
+    console: [{ level: "log", text: "page body text" }],
+  });
+  assert.match(JSON.parse(hinted.text).hint, /returned null/);
+  assert.match(JSON.parse(hinted.text).hint, /use return to capture/);
+
+  const [withResult] = await contentForResult({
+    ok: true,
+    result: "data",
+    console: [{ level: "log", text: "noise" }],
+  });
+  assert.equal(JSON.parse(withResult.text).hint, undefined);
+
+  const [noConsole] = await contentForResult({ ok: true, result: null });
+  assert.equal(JSON.parse(noConsole.text).hint, undefined);
+
+  const [failed] = await contentForResult({
+    ok: false,
+    result: null,
+    error: "boom",
+    console: [{ level: "log", text: "noise" }],
+  });
+  assert.equal(JSON.parse(failed.text).hint, undefined);
+});
+
 test("contentForResult carries a synthesized compact UI directory", async () => {
   const [content] = await contentForResult({
     ok: true,

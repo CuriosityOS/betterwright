@@ -370,6 +370,10 @@ export async function contentForResult(
   if (pendingCredential != null) summary.pendingCredential = pendingCredential;
   if (Array.isArray(result.console) && result.console.length)
     summary.console = result.console;
+  // A null result with console output is almost always a console.log where a
+  // return was meant; say so once, or the model re-runs the same read.
+  if (result.result == null && result.ok !== false && Array.isArray(result.console) && result.console.length)
+    summary.hint = "call returned null; logged values are in console above, use return to capture a value";
   // Screenshots are returned as image content below, not as paths. Other
   // files (downloads, spilled output) are listed here.
   if (files.length) summary.files = files;
