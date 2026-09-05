@@ -362,7 +362,7 @@ test("the advertised MCP tool list stays inside its context budget", async () =>
   // Collapse runs of whitespace: line wrapping is nearly free in characters but
   // costs a token per line, so raw length would understate a rewrap regression.
   const size = JSON.stringify(tools.filter((tool) => tool.name !== "browser_record")).replace(/\s+/g, " ").length;
-  assert.ok(size < 7_250, `MCP tool list grew to ${size} collapsed characters`);
+  assert.ok(size < 7_200, `MCP tool list grew to ${size} collapsed characters`);
   const recordingSize = JSON.stringify(tools.find((tool) => tool.name === "browser_record")).replace(/\s+/g, " ").length;
   assert.ok(recordingSize < 1_000, `recording tool grew to ${recordingSize} collapsed characters`);
 
