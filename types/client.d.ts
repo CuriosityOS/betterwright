@@ -42,6 +42,7 @@ export class BetterWright {
   headless: boolean;
   searchMinIntervalMs: number;
   publicSearchPolicy: "block" | "allow";
+  adBlock: boolean;
   downloadPolicy: "ask" | "allow" | "deny";
   stealthRuntimeFix: boolean;
   launchIdentity: boolean;

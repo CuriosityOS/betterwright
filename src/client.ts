@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 // implementation against them turns a drift between the two into a compile
 // error instead of something only a consumer would notice.
 import type { BetterWrightOptions, LiveViewOptions } from "../types/public.js";
+import { resolveAdBlock } from "./ad-block-config.js";
 import {
   configuredDefaultProvider,
   expandProviderChoice,
@@ -305,6 +306,7 @@ export class BetterWright {
   declare headless: boolean;
   declare searchMinIntervalMs: number;
   declare publicSearchPolicy: "block" | "allow";
+  declare adBlock: boolean;
   declare downloadPolicy: "ask" | "allow" | "deny";
   declare stealthRuntimeFix: boolean;
   declare launchIdentity: boolean;
@@ -441,6 +443,9 @@ export class BetterWright {
    *   behavior change: a page animated by a `requestAnimationFrame` chain does
    *   not resume that chain after being parked (CSS/Web Animations do). Set
    *   `false`, or `BETTERWRIGHT_PARK_BACKGROUND_PAGES=0`, to opt out.
+   * @param {boolean} [options.adBlock=true] block ads and trackers using
+   *   Ghostery filter lists, redirects, and cosmetics. Also settable with
+   *   BETTERWRIGHT_AD_BLOCK=1. Explicit false overrides the environment.
    * @param {object} [options.liveView] defaults for {@link startLiveView}:
    *   `{host, port, interactive, quality, maxWidth, publicHost}`. Defaults to
    *   bind `0.0.0.0` with a LAN `publicHost` so printed URLs open from another
@@ -470,6 +475,7 @@ export class BetterWright {
     this.provider = resolveProviderOption(options, this.home);
     this.browserFlavor = "chromium-fork";
     this.headless = resolveHeadless(options.headless);
+    this.adBlock = resolveAdBlock(options.adBlock);
     this.fingerprintNoise = options.fingerprintNoise !== false;
     this.searchMinIntervalMs = Math.max(Number(options.searchMinIntervalMs) || 0, 0);
     this.publicSearchPolicy = resolvePublicSearchPolicy(options.publicSearchPolicy);
@@ -586,6 +592,7 @@ export class BetterWright {
       chromiumArgs: this.chromiumArgs,
       parkBackgroundPages: this.parkBackgroundPages,
       headless: this.headless,
+      adBlock: this.adBlock,
       credentialCapture: this.credentialCapture,
       searchMinIntervalMs: this.searchMinIntervalMs,
       publicSearchPolicy: this.publicSearchPolicy,

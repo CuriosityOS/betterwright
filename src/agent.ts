@@ -697,6 +697,7 @@ export async function runAgentTask(options: RunAgentTaskOptions) {
     const ownedBrowserOptions: BetterWrightOptions = {
       policy: options.policy || new NetworkPolicy(),
       headless: options.headless,
+      adBlock: options.adBlock,
     };
     if (options.profile) ownedBrowserOptions.profile = options.profile;
     // `vault: undefined` and an absent vault mean different things to the

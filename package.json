@@ -116,6 +116,7 @@
     ]
   },
   "dependencies": {
+    "@ghostery/adblocker-playwright": "2.18.2",
     "playwright-core": "1.61.1",
     "tldts": "7.4.9"
   },

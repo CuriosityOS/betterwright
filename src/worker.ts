@@ -269,6 +269,7 @@ interface CookieSyncResultSource {
 // of BetterWright's own, so the caller is told rather than left wondering why
 // a switch had no effect.
 let chromiumArgsNote = "";
+let adBlockNotes: string[] = [];
 let backendSelectionNote = "";
 // Set by the client via `--import` when stealthRuntimeFix is on: the driver is
 // patchright-core and every page.evaluate runs in an isolated world.
@@ -2069,6 +2070,13 @@ async function insertTypedText(page, target, text, before) {
 }
 
 async function installContextGuard(context) {
+  adBlockNotes = [];
+  const adBlocking = launchConfig.adBlock === true
+    ? await import("./ad-blocker.js")
+    : null;
+  const blocker = adBlocking
+    ? await adBlocking.loadAdBlocker(launchConfig.runtimeDir, { warn: (note) => adBlockNotes.push(note) })
+    : null;
   await context.route("**/*", async (route) => {
     const request = route.request();
     const executeId = transportExecuteId();
@@ -2106,6 +2114,7 @@ async function installContextGuard(context) {
         executeId,
       );
       if (decision?.allowed) {
+        if (blocker && await adBlocking.blockAdRequest(blocker, route)) return;
         const interval = Math.max(Number(launchConfig.searchMinIntervalMs) || 0, 0);
         if (
           interval &&
@@ -2129,6 +2138,7 @@ async function installContextGuard(context) {
       await route.abort("blockedbyclient").catch(() => {});
     }
   });
+  if (blocker) adBlocking.installAdBlockCosmetics(context, blocker);
   // Do not install Playwright's WebSocket interception. It changes the
   // browser's WebSocket path observably enough for commercial bot defenses to
   // challenge an otherwise identical session. WebSocket connections still
@@ -2365,7 +2375,7 @@ async function ensureBrowser(config, { requirePersistentProfile = false } = {}) 
           existing ||
           (await browser.newContext({
             acceptDownloads: true,
-            serviceWorkers: "allow",
+            serviceWorkers: launchConfig.adBlock === true ? "block" : "allow",
           }));
       } catch (error) {
         const end = endRemoteSession;
@@ -2394,7 +2404,7 @@ async function ensureBrowser(config, { requirePersistentProfile = false } = {}) 
           ...chromiumForkContextOptions(),
           args: launchArgs,
           acceptDownloads: true,
-          serviceWorkers: "allow",
+          serviceWorkers: launchConfig.adBlock === true ? "block" : "allow",
           downloadsPath: launchConfig.downloadsDir,
         },
       );
@@ -4188,6 +4198,7 @@ async function buildEnvelope(
       ...(profileWarning ? [profileWarning] : []),
       ...(backendSelectionNote ? [backendSelectionNote] : []),
       ...(chromiumArgsNote ? [chromiumArgsNote] : []),
+      ...adBlockNotes,
       ...(stealthActive ? [STEALTH_WARNING] : []),
       ...(challenges.length ? [challenges[0].advice] : []),
       ...providerWarnings,

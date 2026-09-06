@@ -89,6 +89,8 @@ export interface RunAgentTaskOptions {
    */
   profile?: string;
   headless?: boolean | "auto";
+  /** Ad/tracker blocking for a browser this call creates (default on). */
+  adBlock?: boolean;
   policy?: NetworkPolicy;
   /** Wall-clock budget for the loop in milliseconds (default 30 minutes). */
   maxDurationMs?: number;

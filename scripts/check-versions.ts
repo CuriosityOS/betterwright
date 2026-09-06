@@ -41,11 +41,18 @@ if (lockWorkspace.dependencies?.tldts !== pkg.dependencies.tldts) {
   failures.push("bun.lock tldts pin does not match package.json");
 }
 
-for (const dependency of ["playwright-core", "tldts"]) {
+for (const dependency of ["playwright-core", "tldts", "@ghostery/adblocker-playwright"]) {
   if (lockPackageVersion(dependency) !== pkg.dependencies[dependency]) {
     failures.push(`bun.lock ${dependency} resolved version must be ${pkg.dependencies[dependency]}`);
   }
 }
+
+expectMatch(
+  "Ad blocker cache format pin",
+  read("src/ad-blocker.ts"),
+  /AD_BLOCK_CACHE_FILE = "ad-blocker-([^"]+)\.bin"/,
+  pkg.dependencies["@ghostery/adblocker-playwright"],
+);
 
 const patchright = pkg.optionalDependencies?.["patchright-core"];
 if (patchright !== pkg.dependencies["playwright-core"]) {

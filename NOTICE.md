@@ -21,3 +21,9 @@ that a fork or third-party product is official or endorsed.
 
 Third-party code and patches retain their own copyright and license notices in
 the relevant source files and upstream projects.
+
+The optional ad-blocking feature uses [Ghostery adblocker](https://github.com/ghostery/adblocker),
+copyright Ghostery GmbH and contributors, licensed under MPL-2.0. Its dependency
+packages retain their licenses. Filter lists and replacement resources are fetched
+from Ghostery's upstream assets and retain their respective upstream licenses;
+they are not relicensed under BetterWright's MIT license.

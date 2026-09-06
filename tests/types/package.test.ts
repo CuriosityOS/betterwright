@@ -86,6 +86,7 @@ const options: BetterWrightOptions = {
   policy,
   browser: "chromium-fork",
   headless: "auto",
+  adBlock: true,
   downloadPolicy: "ask",
   profile: "social",
   provider: { provider: "browserbase", apiKey: "k" },

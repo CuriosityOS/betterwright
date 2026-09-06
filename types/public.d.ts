@@ -173,6 +173,11 @@ export interface BetterWrightOptions {
    */
   provider?: BrowserProviderOptions | null;
   headless?: HeadlessMode;
+  /** Ghostery ad/tracker blocking for every page and frame. Default on;
+   * BETTERWRIGHT_AD_BLOCK=0 disables it. Explicit options override the env.
+   * First use downloads filter lists; cached for seven days. Blocks service
+   * workers in newly created contexts. See docs/ad-blocking.md. */
+  adBlock?: boolean;
   defaultTimeout?: number;
   searchMinIntervalMs?: number;
   publicSearchPolicy?: PublicSearchPolicy;

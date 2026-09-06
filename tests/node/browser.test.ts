@@ -9,6 +9,8 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { test } from "node:test";
 import zlib from "node:zlib";
+import { PlaywrightBlocker } from "@ghostery/adblocker-playwright";
+import { AD_BLOCK_CACHE_FILE } from "../../dist/src/ad-blocker.js";
 
 import { doctorReport } from "../../dist/src/doctor.js";
 import { BetterWright, NetworkPolicy, runAgentTask } from "../../dist/src/index.js";
@@ -38,7 +40,13 @@ if (!recordingReady && process.env.BETTERWRIGHT_REQUIRE_RECORDING) {
 }
 const recordingOpts = { skip: recordingReady ? false : "recording runtime is unavailable" };
 function tempHome() {
-  return makeTempDir("betterwright-test-");
+  const home = makeTempDir("betterwright-test-");
+  // Keep unrelated browser regressions independent of live list downloads.
+  // The real engine stays enabled; the ad-blocking regression supplies rules.
+  const runtime = path.join(home, "browser", "runtime");
+  fs.mkdirSync(runtime, { recursive: true });
+  fs.writeFileSync(path.join(runtime, AD_BLOCK_CACHE_FILE), PlaywrightBlocker.empty().serialize());
+  return home;
 }
 
 function firstPngPixel(filePath: string) {
@@ -343,7 +351,7 @@ test("the selected managed browser keeps WebGL rendering available with a cohere
   }
 });
 
-test("managed sessions preserve native service-worker behavior", opts, async () => {
+test("blocking opt-out preserves native service-worker behavior", opts, async () => {
   const site = await listen((request, response) => {
     if (request.url === "/sw.js") {
       response.writeHead(200, {
@@ -356,7 +364,7 @@ test("managed sessions preserve native service-worker behavior", opts, async () 
     response.writeHead(200, { "content-type": "text/html" });
     response.end("<!doctype html><title>Service worker fixture</title>");
   });
-  const bw = new BetterWright({
+  const bw = new BetterWright({ adBlock: false,
     home: tempHome(),
     policy: new NetworkPolicy(),
     headless: true,
@@ -3893,4 +3901,86 @@ test("MCP recording selects MP4 by default and preserves explicit WebM artifacts
   } finally {
     await bw.close();
   }
+});
+
+test("optional ad blocker covers pages, nested frames and popups while preserving policy", opts, async () => {
+  const hits: string[] = [];
+  const html = `<!doctype html><div class="bw-ad-slot">advertisement</div><input id="content">
+    <script src="/bw-ad.js"></script><script src="/bw-ad.js?allowed=1"></script>
+    <script src="/policy-denied.js"></script><script src="/policy-except.js"></script><script src="/replacement.js"></script>`;
+  const site = await listen((request, response) => {
+    hits.push(request.url);
+    if (request.url.includes(".js")) {
+      response.writeHead(200, { "content-type": "application/javascript" });
+      response.end(request.url === "/sw.js" ? "self.addEventListener('fetch', () => {})" : request.url.includes("allowed=1") ? "window.allowedAd=true" : "window.loadedAd=true");
+    } else {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end(request.url === "/" ? `${html}<iframe src="/child"></iframe><iframe src="/bw-ad-frame"></iframe>`
+        : request.url === "/child" ? `${html}<iframe src="/nested"></iframe>` : html);
+    }
+  });
+  try {
+    for (const adBlock of [false, true]) {
+      hits.length = 0;
+      const home = makeTempDir("bw-ad-browser-");
+      const runtime = path.join(home, "browser", "runtime");
+      if (adBlock) {
+        fs.mkdirSync(runtime, { recursive: true });
+        const blocker = PlaywrightBlocker.parse([
+          "/bw-ad.js$script", "@@/bw-ad.js?allowed=1$script", "/bw-ad-frame$subdocument",
+          "127.0.0.1##.bw-ad-slot", "/policy-denied.js$script,redirect=denied.js",
+          "/replacement.js$script,redirect=noop.js", "@@/policy-except.js$script",
+        ].join("\n"));
+        blocker.updateResources(JSON.stringify({ redirects: [
+          { name: "denied.js", aliases: [], contentType: "application/javascript", body: "window.policyBypassed=true" },
+          { name: "noop.js", aliases: [], contentType: "application/javascript;base64", body: Buffer.from("window.replacementLoaded=true").toString("base64") },
+        ], scriptlets: [] }), "fixture");
+        fs.writeFileSync(path.join(runtime, AD_BLOCK_CACHE_FILE), blocker.serialize());
+      }
+      const browser = new BetterWright({ home, headless: true, vault: false, adBlock,
+        policy: new NetworkPolicy({ custom: (url) => new URL(url).pathname.startsWith("/policy-") ? { allowed: false, reason: "fixture policy" } : null }),
+      });
+      try {
+        const result = await browser.run(`
+          await page.goto(${JSON.stringify(site.origin)});
+          await page.frameLocator('iframe[src="/child"]').frameLocator('iframe').locator('#content').fill('nested works');
+          await page.waitForTimeout(600);
+          const inspect = (frame) => frame.evaluate(() => ({
+            loadedAd: window.loadedAd === true, allowedAd: window.allowedAd === true,
+            policyBypassed: window.policyBypassed === true,
+            replacementLoaded: window.replacementLoaded === true,
+            hidden: getComputedStyle(document.querySelector('.bw-ad-slot')).display === 'none',
+          }));
+          const swRegistered = await page.evaluate(async () => Boolean(await navigator.serviceWorker.register('/sw.js')));
+          const main = await inspect(page);
+          const nested = await inspect(page.frames().find(f => f.url().endsWith('/nested')));
+          const value = await page.frameLocator('iframe[src="/child"]').frameLocator('iframe').locator('#content').inputValue();
+          const popupPromise = page.waitForEvent('popup');
+          await page.evaluate(() => window.open('/popup'));
+          const popup = await popupPromise;
+          await popup.waitForLoadState();
+          await popup.waitForTimeout(600);
+          return { main, popup: await inspect(popup), nested, value, swRegistered };
+        `);
+        assert.equal(result.ok, true, result.error);
+        assert.equal(result.result.value, "nested works");
+        assert.equal(result.result.swRegistered, !adBlock);
+        for (const state of [result.result.main, result.result.popup, result.result.nested]) {
+          assert.equal(state.loadedAd, !adBlock);
+          assert.equal(state.allowedAd, true);
+          assert.equal(state.policyBypassed, false);
+          assert.equal(state.replacementLoaded, adBlock);
+          assert.equal(state.hidden, adBlock);
+        }
+        assert.equal(hits.includes("/bw-ad.js"), !adBlock);
+        assert.equal(hits.includes("/bw-ad-frame"), !adBlock);
+        assert.equal(hits.includes("/policy-denied.js"), false);
+        assert.equal(hits.includes("/policy-except.js"), false);
+        if (!adBlock) assert.equal(fs.existsSync(path.join(runtime, AD_BLOCK_CACHE_FILE)), false);
+      } finally {
+        await browser.close();
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+    }
+  } finally { await site.close(); }
 });

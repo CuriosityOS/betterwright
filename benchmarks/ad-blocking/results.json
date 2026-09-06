@@ -1,0 +1,161 @@
+{
+  "metadata": {
+    "date": "2026-09-06T01:06:51-0400",
+    "host": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "cpu": "Apple M4 Max",
+    "browser": "BetterChromium 151.0.7922.108",
+    "bun": "1.4.0",
+    "modelCalls": 0,
+    "filterCacheSha256": "0ed300738d8325acd59f10853b549a126c606a0de2e57d3ad015994e5e0b0b84",
+    "commit": "1eae4445a0e3c2bc6c2b38ca0603ac86cd910247",
+    "patchSha256": "2b12944dc48d57fdf61b0eff735060f2c9f6d931e61ce09a0d0b8518ac331233",
+    "sampling": "250ms process-tree CPU and summed RSS, including driver startup/filter deserialization/browser launch; excludes sampler, cleanup, and first list download. Short-lived processes can be missed; RSS can double-count shared pages. Fresh profile every trial; same cache, headless, parking disabled equally to expose active-page CPU; sequential alternating order."
+  },
+  "summary": {
+    "frames": {
+      "cpuChangePercent": -74.48805460750853,
+      "ramChangePercent": -49.781713091065605,
+      "completePairs": 1
+    },
+    "control": {
+      "cpuChangePercent": 3.4782608695652195,
+      "ramChangePercent": 2.826444554688101,
+      "completePairs": 1
+    }
+  },
+  "trials": [
+    {
+      "mode": "off",
+      "task": "frames",
+      "repeat": 1,
+      "dwellSeconds": 25,
+      "cpuSeconds": 11.72,
+      "peakRssMiB": 2541.09375,
+      "wallSeconds": 27.535882958,
+      "ok": true,
+      "error": null,
+      "verified": true,
+      "values": {
+        "single": "CPU benchmark",
+        "nested": "nested verified"
+      },
+      "frameCount": 31,
+      "summaryRecoveredFromPreview": true
+    },
+    {
+      "mode": "on",
+      "task": "frames",
+      "repeat": 1,
+      "dwellSeconds": 25,
+      "cpuSeconds": 2.99,
+      "peakRssMiB": 1276.09375,
+      "wallSeconds": 27.577713834,
+      "ok": true,
+      "error": null,
+      "verified": true,
+      "values": {
+        "single": "CPU benchmark",
+        "nested": "nested verified"
+      },
+      "frameCount": 4,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "on",
+      "task": "frames",
+      "repeat": 2,
+      "dwellSeconds": 25,
+      "cpuSeconds": 2.92,
+      "peakRssMiB": 1180.015625,
+      "wallSeconds": 18.913624209,
+      "ok": false,
+      "error": "goto: net::ERR_SOCKET_NOT_CONNECTED at https://demo.automationtesting.in/Frames.html\nCall log:\n\u001b[2m  - navigating to \"https://demo.automationtesting.in/Frames.html\", waiting until \"domcontentloaded\"\u001b[22m\n",
+      "verified": false,
+      "values": null,
+      "frameCount": null,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "off",
+      "task": "frames",
+      "repeat": 2,
+      "dwellSeconds": 25,
+      "cpuSeconds": 3.32,
+      "peakRssMiB": 1213.953125,
+      "wallSeconds": 19.869568,
+      "ok": false,
+      "error": "goto: Timeout 18000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"https://demo.automationtesting.in/Frames.html\", waiting until \"domcontentloaded\"\u001b[22m\n",
+      "verified": false,
+      "values": null,
+      "frameCount": null,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "off",
+      "task": "frames",
+      "repeat": 3,
+      "dwellSeconds": 25,
+      "cpuSeconds": 3.35,
+      "peakRssMiB": 1186.65625,
+      "wallSeconds": 23.624031666,
+      "ok": false,
+      "error": "goto: Timeout 18000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"https://demo.automationtesting.in/Frames.html\", waiting until \"domcontentloaded\"\u001b[22m\n",
+      "verified": false,
+      "values": null,
+      "frameCount": null,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "on",
+      "task": "frames",
+      "repeat": 3,
+      "dwellSeconds": 25,
+      "cpuSeconds": 3.05,
+      "peakRssMiB": 1289.734375,
+      "wallSeconds": 27.715343666,
+      "ok": true,
+      "error": null,
+      "verified": true,
+      "values": {
+        "single": "CPU benchmark",
+        "nested": "nested verified"
+      },
+      "frameCount": 4,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "off",
+      "task": "control",
+      "repeat": 1,
+      "dwellSeconds": 15,
+      "cpuSeconds": 2.3,
+      "peakRssMiB": 1196.84375,
+      "wallSeconds": 16.395176375,
+      "ok": true,
+      "error": null,
+      "verified": true,
+      "values": {
+        "text": "CPU benchmark"
+      },
+      "frameCount": 1,
+      "summaryRecoveredFromPreview": false
+    },
+    {
+      "mode": "on",
+      "task": "control",
+      "repeat": 1,
+      "dwellSeconds": 15,
+      "cpuSeconds": 2.38,
+      "peakRssMiB": 1230.671875,
+      "wallSeconds": 16.33888875,
+      "ok": true,
+      "error": null,
+      "verified": true,
+      "values": {
+        "text": "CPU benchmark"
+      },
+      "frameCount": 1,
+      "summaryRecoveredFromPreview": false
+    }
+  ]
+}
