@@ -190,6 +190,13 @@ are no adapter nicknames: `claude`, `codex`, and `grok` by themselves are
 rejected. Pick the id you want to run; BetterWright figures out *where* it
 comes from.
 
+The examples below use the current model selections in the
+[README](../README.md#2-standalone--betterwright-is-the-browser-agent):
+Claude Opus 5, Grok 4.6, Qwen3.8 27B, and GPT-5.6 Sol for the subscription
+quick start. The older IDs under **When you name none** describe 2.4.0's
+built-in fallbacks. Pass an explicit `--model` (or set `BETTERWRIGHT_MODEL`)
+to select the current examples instead of those fallbacks.
+
 ### When you name none
 
 Omitting `--model` uses whichever backend you have actually configured, in this
@@ -204,7 +211,7 @@ and print the ways to fix it, rather than failing inside a model adapter.
 
 ### How selection works
 
-1. **Source-qualified** (`ollama/qwen3:8b`, `openrouter/anthropic/claude-sonnet-5`,
+1. **Source-qualified** (`ollama/qwen3.8:27b`, `openrouter/anthropic/claude-sonnet-5`,
    `codex/gpt-5.6-sol`) — used immediately; no discovery.
 2. **Custom base URL** (`--base-url` / `--endpoint`) — pins the source to that
    URL; the bare id is the model name on that server.
@@ -242,22 +249,27 @@ the same name appears in more than one place.
 betterwright auth --login codex
 betterwright exec "inspect example.com" --model gpt-5.6-sol
 
+# Optional GPT-6 Astra (OpenAI API) — Responses is required for tool calling
+OPENAI_API_KEY=… betterwright exec "inspect example.com" \
+  --model gpt-6-astra --protocol responses
+
 # Claude (Anthropic API) — optional peer dep + API key
 npm install @anthropic-ai/sdk
 ANTHROPIC_API_KEY=… betterwright exec "inspect example.com" \
-  --model claude-opus-4-8
+  --model claude-opus-5
 
 # Grok (xAI OAuth or API key)
 betterwright auth --login grok
-betterwright exec "inspect example.com" --model grok-4.3
-# or: XAI_API_KEY=… betterwright exec "…" --model grok-4.3
+betterwright exec "inspect example.com" --model grok-4.6
+# or: XAI_API_KEY=… betterwright exec "…" --model grok-4.6
 
-# Ollama (local, no key) — model must support tool/function calling
-ollama pull qwen3:8b
+# Ollama (local, no key) — Qwen3.8 27B supports tool/function calling
+# About 18 GB of weights; allow additional memory for the context and browser
+ollama pull qwen3.8:27b
 betterwright models ollama
-betterwright exec "inspect example.com" --model qwen3:8b
+betterwright exec "inspect example.com" --model qwen3.8:27b
 # pin if another source also exposes that id:
-betterwright exec "inspect example.com" --model ollama/qwen3:8b
+betterwright exec "inspect example.com" --model ollama/qwen3.8:27b
 
 # vLLM (local OpenAI-compatible server with tool calling enabled)
 betterwright exec "inspect example.com" --model vllm/<served-model-id>
@@ -304,6 +316,10 @@ Chat Completions (`--protocol chat`, the default) is the widest common
 surface. Use `--protocol responses` only when the server implements the
 Responses API.
 
+GPT-6 Astra requires Responses for tool calling: pass
+`--model gpt-6-astra --protocol responses` when using an OpenAI API key.
+See the [OpenAI model guide](https://developers.openai.com/api/docs/guides/latest-model).
+
 **Tool / function calling is required.** The loop drives the browser through
 tools (`browser`, `done`, optional `login` / `ask` / `handoff`). A text-only
 model will not work, even if chat completions succeed.
@@ -327,8 +343,8 @@ Native sources are chosen from the **model id family**, or by an explicit
 | starts with `gpt`, `o`+digit, `chatgpt`, or `codex` | Codex | `betterwright auth --login codex`, or `OPENAI_API_KEY` / `CODEX_BASE_URL` |
 | starts with `grok` | Grok | `betterwright auth --login grok`, or `GROK_API_KEY` / `XAI_API_KEY` |
 
-Defaults: Claude `claude-opus-4-8`, Codex `gpt-5.6-sol` (or the model stored
-in `~/.codex/config.toml`), Grok `grok-4.3`. Qualify when needed
+Built-in 2.4.0 fallbacks: Claude `claude-opus-4-8`, Codex `gpt-5.6-sol` (or
+the model stored in `~/.codex/config.toml`), Grok `grok-4.3`. Qualify when needed
 (`codex/gpt-5.6-sol`). Base-URL overrides: `CODEX_BASE_URL`,
 `GROK_BASE_URL` / `XAI_BASE_URL`. xAI may gate OAuth API access by
 subscription tier; a 403 usually means switch to an API key.
@@ -354,7 +370,7 @@ CLI behavior:
 
 | Old | New |
 | --- | --- |
-| `--model claude` / `codex` / `grok` | Real id: `--model claude-opus-4-8`, `gpt-5.6-sol`, `grok-4.3` |
+| `--model claude` / `codex` / `grok` | Real id: `--model claude-opus-5`, `gpt-5.6-sol`, `grok-4.6` |
 | `--model-id <id>` | Merged into `--model <id>` (the old flag errors with a hint) |
 | `--provider ollama` (or similar) | Put the source in the id only when needed: `--model ollama/<id>` |
 
@@ -364,7 +380,7 @@ CLI behavior:
 | --- | --- |
 | `Unknown model "codex"` (or `claude` / `grok`) | Pass a real id, not the old adapter name |
 | `No available model source exposes "…"` | Run `betterwright models`; start Ollama/vLLM; set `OPENROUTER_API_KEY`; or pin `source/id` / `--base-url` |
-| `available from multiple sources: …` | Pick one of the listed selectors, e.g. `ollama/qwen3:8b` |
+| `available from multiple sources: …` | Pick one of the listed selectors, e.g. `ollama/qwen3.8:27b` |
 | Ollama listed empty / connection errors | Confirm `ollama serve` is up; override with `OLLAMA_BASE_URL` if not on the default port |
 | Model answers in prose but never calls tools | Switch to a tool-calling model; for vLLM enable auto tool choice + parser |
 | Key over plain HTTP refused | Use HTTPS, loopback, or pass `--allow-insecure-model-endpoint` deliberately |
@@ -378,7 +394,7 @@ import { runAgentTask } from "betterwright/agent";
 
 const result = await runAgentTask({
   task: "log in to example.com and download this month's invoice",
-  model: "claude-opus-4-8",       // actual model id, or your own model object
+  model: "claude-opus-5",         // actual model id, or your own model object
   maxDurationMs: 30 * 60 * 1000,   // configurable; there is no fixed step cap
   maxTranscriptChars: 1_000_000,   // bound accumulated model/tool context
   guardrails: { confirmBeforePurchase: true },
@@ -411,7 +427,7 @@ import { BetterWright } from "betterwright";
 import { runAgentTask } from "betterwright/agent";
 
 const browser = new BetterWright(); // encrypted local vault + `login` tool by default
-await runAgentTask({ task: "…", browser, model: "claude-opus-4-8" });
+await runAgentTask({ task: "…", browser, model: "claude-opus-5" });
 await browser.close();
 ```
 
@@ -450,13 +466,13 @@ import { endpointModel, runAgentTask } from "betterwright/agent";
 
 const model = endpointModel({
   source: "ollama",          // openrouter | ollama | vllm | custom
-  model: "qwen3:8b",
+  model: "qwen3.8:27b",
   // baseURL: "http://127.0.0.1:11434/v1",  // optional override
 });
 await runAgentTask({ task: "…", model });
 ```
 
-Or pass a string the same way the CLI does (`"ollama/qwen3:8b"`,
+Or pass a string the same way the CLI does (`"ollama/qwen3.8:27b"`,
 `"gpt-5.6-sol"`, …). The lower-level `openaiModel({ baseURL, model, apiKey })`
 remains available when you need full control of the request shape.
 
