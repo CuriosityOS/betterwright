@@ -1,7 +1,7 @@
 ---
 name: browser
 description: Drive a persistent, policy-guarded real web browser via the betterwright CLI. Use for any task that needs the live web — logging in, filling forms, booking, buying, or reading a page an API will not give you.
-generated_by: betterwright@2.3.0
+generated_by: betterwright@2.4.0
 ---
 
 # BetterWright browser

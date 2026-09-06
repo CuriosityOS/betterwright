@@ -9,6 +9,37 @@ Releases before 1.1.3 predate this file; their notes live on the
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-06
+
+### Added
+
+- Ghostery ad and tracker blocking across API, CLI, MCP, Pi, and agent-created
+  browser sessions, including nested frames and popup subresources. The
+  maintained preset includes EasyList, EasyPrivacy, Peter Lowe, and uBlock
+  filters, exceptions, local replacements, cosmetic hiding, and scriptlets.
+- Compiled filter caching for seven days, bounded refresh downloads, and
+  continued use of valid cached rules when a refresh fails.
+
+### Changed
+
+- Ad blocking is **on by default**. Disable it with `{ adBlock: false }`,
+  `--no-ad-block`, or `BETTERWRIGHT_AD_BLOCK=0`. Explicit options and flags
+  override the environment. First enabled use downloads the filter lists;
+  new contexts disable service workers while blocking is enabled. Network
+  policy remains authoritative. See [ad blocking](docs/ad-blocking.md).
+- Reuse shared action-directory context within each synchronous frame scan,
+  reducing repeated DOM work while retaining complete output.
+- Limit SwiftShader to WebGL on GPU-less Linux, preserving existing renderer
+  and recording memory bounds while reducing graphics overhead.
+
+### Fixed
+
+- Resolve child and nested frame snapshot references, including `aria-ref=`
+  references, in `controls.batch` with existing validation and credential checks.
+- Refresh action-directory context on every scan, including empty context.
+- Key the CI browser cache by release tag and asset checksum so revised native
+  builds cannot reuse an older browser with the same Chromium version.
+
 ## [2.3.0] - 2026-09-05
 
 ### Added
@@ -1409,7 +1440,8 @@ number to be reused.
   refresh already-installed skill files but never create new ones; `doctor`
   tips when a managed skill is stale.
 
-[Unreleased]: https://github.com/BetterWright/betterwright/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/BetterWright/betterwright/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/BetterWright/betterwright/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/BetterWright/betterwright/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/BetterWright/betterwright/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/BetterWright/betterwright/compare/v2.0.1...v2.1.0
