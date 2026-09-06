@@ -377,3 +377,11 @@ inside a larger product. See [NOTICE.md](NOTICE.md) and
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### Ad blocking
+
+Ghostery ad and tracker blocking is **on by default**, across tabs and frames.
+Use `new BetterWright({ adBlock: false })`, `betterwright run --no-ad-block`, or
+`BETTERWRIGHT_AD_BLOCK=0` (also applies to MCP and Pi) to disable it. Explicit
+constructor options and CLI flags override the environment. See [ad blocking](docs/ad-blocking.md)
+for cache updates, switching an existing session, and coverage limits.

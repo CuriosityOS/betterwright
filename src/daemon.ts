@@ -311,6 +311,7 @@ interface NormalizedDaemonPolicy {
 }
 
 interface NormalizedDaemonBrowser {
+  adBlock: boolean;
   launchIdentity: boolean;
   upstreamProxy: string | null;
   geoip: boolean;
@@ -366,6 +367,7 @@ export function normalizeDaemonConfig(config: any = {}): NormalizedDaemonConfig 
     blockHosts: hosts(untrustedField(policy, "blockHosts")),
   };
   normalized.browser = {
+    adBlock: untrustedField(browser, "adBlock") !== false,
     launchIdentity: untrustedField(browser, "launchIdentity") !== false,
     upstreamProxy: upstreamProxy ? String(upstreamProxy) : null,
     geoip: untrustedField(browser, "geoip") === true,
@@ -376,6 +378,8 @@ export function normalizeDaemonConfig(config: any = {}): NormalizedDaemonConfig 
     stealthRuntimeFix: untrustedField(browser, "stealthRuntimeFix") === true,
     provider: normalizeDaemonProvider(untrustedField(browser, "provider")),
   };
+  // Include both modes in the signature: a pre-blocker daemon must not be
+  // silently reused when the default now requires blocking.
   return normalized;
 }
 
@@ -422,6 +426,7 @@ export async function createBrowserFromDaemonConfig(config) {
   const options: BetterWrightOptions = {
     policy: new NetworkPolicy(normalized.policy),
     headless: normalized.headless,
+    adBlock: normalized.browser.adBlock === true,
     launchIdentity: normalized.browser.launchIdentity,
     upstreamProxy: normalized.browser.upstreamProxy || undefined,
     geoip: normalized.browser.geoip,

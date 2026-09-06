@@ -60,17 +60,19 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - run: bun run build
       # BetterChromium is the only bundled browser backend.
-      - name: Read the managed browser version
+      - name: Read the managed browser release and checksum
         id: browser_pins
         shell: bash
         run: |
-          echo "chromium=$(bun -e 'import("./dist/src/chromium-fork.js").then(m => console.log(m.BETTERWRIGHT_CHROMIUM_VERSION))')" >> "$GITHUB_OUTPUT"
+          bun -e 'import { CHROMIUM_FORK_RELEASE_TAG, CHROMIUM_FORK_ASSETS } from "./dist/src/chromium-fork.js"; console.log(`release=${CHROMIUM_FORK_RELEASE_TAG}\nsha256=${CHROMIUM_FORK_ASSETS["linux-x64"].sha256}`)' >> "$GITHUB_OUTPUT"
       - name: Cache the managed browser download
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.betterwright/chromium
-          key: managed-browsers-${{ runner.os }}-chromium-${{ steps.browser_pins.outputs.chromium }}
+          # Revisions of the same Chromium version carry different native
+          # patches. Never reuse a cache from an older release or asset.
+          key: managed-browsers-${{ runner.os }}-${{ steps.browser_pins.outputs.release }}-${{ steps.browser_pins.outputs.sha256 }}
       - name: Install managed browser
         run: bun dist/bin/betterwright.js setup
       - name: Enable Chromium sandbox user namespaces

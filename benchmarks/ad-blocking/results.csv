@@ -1,0 +1,18 @@
+mode,task,repeat,dwellSeconds,cpuSeconds,peakRssMiB,wallSeconds,ok,error,verified,values,frameCount,summaryRecoveredFromPreview
+off,frames,1,25,11.72,2541.09375,27.535882958,True,,True,"{'single': 'CPU benchmark', 'nested': 'nested verified'}",31,True
+on,frames,1,25,2.99,1276.09375,27.577713834,True,,True,"{'single': 'CPU benchmark', 'nested': 'nested verified'}",4,False
+on,frames,2,25,2.92,1180.015625,18.913624209,False,"goto: net::ERR_SOCKET_NOT_CONNECTED at https://demo.automationtesting.in/Frames.html
+Call log:
+[2m  - navigating to ""https://demo.automationtesting.in/Frames.html"", waiting until ""domcontentloaded""[22m
+",False,,,False
+off,frames,2,25,3.32,1213.953125,19.869568,False,"goto: Timeout 18000ms exceeded.
+Call log:
+[2m  - navigating to ""https://demo.automationtesting.in/Frames.html"", waiting until ""domcontentloaded""[22m
+",False,,,False
+off,frames,3,25,3.35,1186.65625,23.624031666,False,"goto: Timeout 18000ms exceeded.
+Call log:
+[2m  - navigating to ""https://demo.automationtesting.in/Frames.html"", waiting until ""domcontentloaded""[22m
+",False,,,False
+on,frames,3,25,3.05,1289.734375,27.715343666,True,,True,"{'single': 'CPU benchmark', 'nested': 'nested verified'}",4,False
+off,control,1,15,2.3,1196.84375,16.395176375,True,,True,{'text': 'CPU benchmark'},1,False
+on,control,1,15,2.38,1230.671875,16.33888875,True,,True,{'text': 'CPU benchmark'},1,False

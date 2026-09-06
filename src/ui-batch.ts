@@ -10,7 +10,7 @@ const MAX_PACING_MS = 1_000;
 const MAX_DIRECTORY_WAIT_MS = 5_000;
 const EXPECTATION_TIMEOUT_MS = 10_000;
 const ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
-const REF_PATTERN = /^(?:aria-ref=)?e\d+$/;
+const REF_PATTERN = /^(?:aria-ref=)?(?:f\d+)*e\d+$/;
 const READ_ACTIONS = new Set(["read", "readUrl"]);
 const ACTIONS = new Set([
   "click",

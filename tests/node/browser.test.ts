@@ -8,6 +8,9 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { test } from "node:test";
+import zlib from "node:zlib";
+import { PlaywrightBlocker } from "@ghostery/adblocker-playwright";
+import { AD_BLOCK_CACHE_FILE } from "../../dist/src/ad-blocker.js";
 
 import { doctorReport } from "../../dist/src/doctor.js";
 import { BetterWright, NetworkPolicy, runAgentTask } from "../../dist/src/index.js";
@@ -37,7 +40,57 @@ if (!recordingReady && process.env.BETTERWRIGHT_REQUIRE_RECORDING) {
 }
 const recordingOpts = { skip: recordingReady ? false : "recording runtime is unavailable" };
 function tempHome() {
-  return makeTempDir("betterwright-test-");
+  const home = makeTempDir("betterwright-test-");
+  // Keep unrelated browser regressions independent of live list downloads.
+  // The real engine stays enabled; the ad-blocking regression supplies rules.
+  const runtime = path.join(home, "browser", "runtime");
+  fs.mkdirSync(runtime, { recursive: true });
+  fs.writeFileSync(path.join(runtime, AD_BLOCK_CACHE_FILE), PlaywrightBlocker.empty().serialize());
+  return home;
+}
+
+function firstPngPixel(filePath: string) {
+  const png = fs.readFileSync(filePath);
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("ascii");
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === "IDAT") {
+      idat.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+  }
+  assert.equal(bitDepth, 8);
+  assert.ok(colorType === 2 || colorType === 6, `unsupported PNG color type ${colorType}`);
+  assert.ok(width > 0 && height > 0);
+  const channels = colorType === 6 ? 4 : 3;
+  const inflated = zlib.inflateSync(Buffer.concat(idat));
+  const first = inflated.subarray(1, 1 + channels);
+  return [first[0], first[1], first[2], colorType === 6 ? first[3] : 255];
+}
+
+function assertRgbaClose(actual: number[], expected: number[], tolerance = 2) {
+  assert.equal(actual.length, expected.length);
+  for (const [index, value] of actual.entries()) {
+    assert.ok(
+      Math.abs(value - expected[index]) <= tolerance,
+      `channel ${index}: expected ${expected[index]}, got ${value} from [${actual.join(", ")}]`,
+    );
+  }
 }
 
 // Chromium's site isolation keys on scheme + eTLD+1 and ignores the port, so a
@@ -147,69 +200,158 @@ test("stock software-rasterizer boilerplate warns without blocking launch", opts
   }
 });
 
-test("the selected managed browser keeps WebGL available with a coherent identity", opts, async () => {
-  const bw = new BetterWright({ home: tempHome(), headless: true });
+test("the selected managed browser keeps WebGL rendering available with a coherent identity", opts, async () => {
+  const site = await listen((request, response) => {
+    if (request.url !== "/") { response.writeHead(404).end(); return; }
+    response.writeHead(200, { "content-type": "text/html" });
+    response.end(`<!doctype html>
+      <style>body{margin:0;background:rgb(18,52,86)}</style>
+      <canvas id="two" width="2" height="2"></canvas>
+      <canvas id="one" width="2" height="2"></canvas>
+      <canvas id="webgl2" width="2" height="2"></canvas>`);
+  });
+  const bw = new BetterWright({ home: tempHome(), policy: new NetworkPolicy(), headless: true });
   try {
-    const result = await bw.run(`return await page.evaluate(() => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 2;
-      canvas.height = 2;
-      const gl = canvas.getContext("webgl");
-      if (!gl) {
-        // Diagnostic detail for a GPU-less runner: report every GL surface so a
-        // null context says why rather than just "false".
-        let webgl2 = "null";
-        try { webgl2 = canvas.getContext("webgl2") ? "ok" : "null"; } catch (e) { webgl2 = "err:" + e.message; }
-        return { available: false, webgl2, userAgent: navigator.userAgent, platform: navigator.platform };
-      }
-      gl.clearColor(0.25, 0.5, 0.75, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      const pixels = new Uint8Array(4);
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      const debug = gl.getExtension("WEBGL_debug_renderer_info");
-      return {
-        available: true,
-        vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
-        renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
-        extensions: gl.getSupportedExtensions()?.length || 0,
-        pixels: [...pixels],
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-      };
-    });`);
+    const result = await bw.run(`
+      await page.goto(${JSON.stringify(site.origin)});
+      const rendering = await page.evaluate(async () => {
+        function compileShader(gl, type, source) {
+          const shader = gl.createShader(type);
+          if (!shader) throw new Error('createShader returned null');
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            throw new Error(gl.getShaderInfoLog(shader) || 'shader compile failed');
+          }
+          return shader;
+        }
+        function drawWebgl(id, kind) {
+          const canvas = document.getElementById(id);
+          const gl = canvas.getContext(kind, { preserveDrawingBuffer: true });
+          if (!gl) return { available: false, kind, userAgent: navigator.userAgent, platform: navigator.platform };
+          const secondVersion = kind === 'webgl2';
+          const vertexSource = secondVersion
+            ? '#version 300 es\\nin vec2 position; void main(){ gl_Position = vec4(position, 0.0, 1.0); }'
+            : 'attribute vec2 position; void main(){ gl_Position = vec4(position, 0.0, 1.0); }';
+          const fragmentSource = secondVersion
+            ? '#version 300 es\\nprecision mediump float; out vec4 color; void main(){ color = vec4(0.8, 0.3, 0.1, 1.0); }'
+            : 'precision mediump float; void main(){ gl_FragColor = vec4(0.2, 0.4, 0.6, 1.0); }';
+          const program = gl.createProgram();
+          if (!program) throw new Error('createProgram returned null');
+          gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, vertexSource));
+          gl.attachShader(program, compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource));
+          gl.linkProgram(program);
+          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            throw new Error(gl.getProgramInfoLog(program) || 'program link failed');
+          }
+          gl.useProgram(program);
+          const buffer = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+          const location = gl.getAttribLocation(program, 'position');
+          gl.enableVertexAttribArray(location);
+          gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
+          gl.viewport(0, 0, 2, 2);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          const pixels = new Uint8Array(4);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+          const debug = gl.getExtension('WEBGL_debug_renderer_info');
+          return {
+            available: true,
+            kind,
+            vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+            renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+            extensions: gl.getSupportedExtensions()?.length || 0,
+            pixels: [...pixels],
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+          };
+        }
+        const two = document.getElementById('two').getContext('2d');
+        two.fillStyle = 'rgb(51,102,153)';
+        two.fillRect(0, 0, 2, 2);
+        async function measureWebglFrames() {
+          const canvas = document.getElementById('one');
+          const gl = canvas.getContext('webgl');
+          if (!gl) return { available: false };
+          let frames = 0;
+          const start = performance.now();
+          await new Promise((resolve) => {
+            const draw = (now) => {
+              frames += 1;
+              gl.clearColor(frames % 2 ? 0.1 : 0.4, 0.2, 0.3, 1);
+              gl.clear(gl.COLOR_BUFFER_BIT);
+              if (now - start >= 500) resolve();
+              else requestAnimationFrame(draw);
+            };
+            requestAnimationFrame(draw);
+          });
+          return { available: true, frames, elapsedMs: performance.now() - start };
+        }
+        const webgpu = { secureContext: isSecureContext, hasGpu: 'gpu' in navigator };
+        if (webgpu.hasGpu) {
+          try {
+            webgpu.adapter = Boolean(await navigator.gpu.requestAdapter());
+          } catch (error) {
+            webgpu.error = error instanceof Error ? error.message : String(error);
+          }
+        }
+        return {
+          canvas2d: [...two.getImageData(0, 0, 1, 1).data],
+          webgl: drawWebgl('one', 'webgl'),
+          webgl2: drawWebgl('webgl2', 'webgl2'),
+          webglFrames: await measureWebglFrames(),
+          webgpu,
+        };
+      });
+      const artifact = await screenshot({kind: 'debug', name: 'rendering-css.png'});
+      return { ...rendering, artifact };
+    `);
     assert.equal(result.ok, true, result.error);
-    assert.equal(result.result.available, true, JSON.stringify(result.result));
-    assert.ok(isString(result.result.vendor));
-    assert.ok(result.result.vendor.length > 0);
-    assert.ok(isString(result.result.renderer));
-    assert.ok(result.result.renderer.length > 0);
-    assert.ok(result.result.extensions > 0);
-    for (const [index, actual] of result.result.pixels.entries()) {
-      assert.ok(Math.abs(actual - [64, 128, 191, 255][index]) <= 1);
+    assertRgbaClose(result.result.canvas2d, [51, 102, 153, 255]);
+    assert.equal(result.result.webgl.available, true, JSON.stringify(result.result.webgl));
+    assert.equal(result.result.webgl2.available, true, JSON.stringify(result.result.webgl2));
+    assertRgbaClose(result.result.webgl.pixels, [51, 102, 153, 255]);
+    assertRgbaClose(result.result.webgl2.pixels, [204, 77, 26, 255]);
+    for (const gl of [result.result.webgl, result.result.webgl2]) {
+      assert.ok(isString(gl.vendor));
+      assert.ok(gl.vendor.length > 0);
+      assert.ok(isString(gl.renderer));
+      assert.ok(gl.renderer.length > 0);
+      assert.ok(gl.extensions > 0);
     }
+    assert.equal(result.result.webglFrames.available, true, JSON.stringify(result.result.webglFrames));
+    assert.ok(result.result.webglFrames.frames >= 10, JSON.stringify(result.result.webglFrames));
+    assert.ok(result.result.webglFrames.elapsedMs >= 450, JSON.stringify(result.result.webglFrames));
+    assert.equal(result.result.webgpu.secureContext, true, JSON.stringify(result.result.webgpu));
+    assert.equal(isBoolean(result.result.webgpu.hasGpu), true, JSON.stringify(result.result.webgpu));
+    if (result.result.webgpu.hasGpu) {
+      assert.equal(isBoolean(result.result.webgpu.adapter), true, JSON.stringify(result.result.webgpu));
+    }
+    assertRgbaClose(firstPngPixel(result.result.artifact.path), [18, 52, 86, 255], 3);
     if (browserStatus.browser === "chromium-fork" && process.platform === "linux") {
-      // Honest-Linux fork: no Mac masquerade. The WebGL identity is a common
-      // GPU (never "SwiftShader"/"llvmpipe", even on a GPU-less host), the
-      // platform is Linux, and the UA says Linux.
-      assert.equal(result.result.platform, "Linux x86_64", JSON.stringify(result.result));
-      assert.match(result.result.userAgent, /Linux/, result.result.userAgent);
-      assert.doesNotMatch(result.result.userAgent, /Macintosh/, result.result.userAgent);
-      assert.doesNotMatch(result.result.renderer, /SwiftShader|llvmpipe|softpipe/i, result.result.renderer);
-      assert.match(result.result.renderer, /ANGLE/, result.result.renderer);
-    } else if (/Macintosh/.test(result.result.userAgent)) {
-      assert.equal(result.result.platform, "MacIntel");
-    } else if (/Windows/.test(result.result.userAgent)) {
-      assert.equal(result.result.platform, "Win32");
+      assert.equal(result.result.webgl.platform, "Linux x86_64", JSON.stringify(result.result.webgl));
+      assert.match(result.result.webgl.userAgent, /Linux/, result.result.webgl.userAgent);
+      assert.doesNotMatch(result.result.webgl.userAgent, /Macintosh/, result.result.webgl.userAgent);
+      assert.doesNotMatch(result.result.webgl.renderer, /SwiftShader|llvmpipe|softpipe/i, result.result.webgl.renderer);
+      assert.doesNotMatch(result.result.webgl2.renderer, /SwiftShader|llvmpipe|softpipe/i, result.result.webgl2.renderer);
+      assert.match(result.result.webgl.renderer, /ANGLE/, result.result.webgl.renderer);
+      assert.match(result.result.webgl2.renderer, /ANGLE/, result.result.webgl2.renderer);
+    } else if (/Macintosh/.test(result.result.webgl.userAgent)) {
+      assert.equal(result.result.webgl.platform, "MacIntel");
+    } else if (/Windows/.test(result.result.webgl.userAgent)) {
+      assert.equal(result.result.webgl.platform, "Win32");
     } else {
-      assert.match(result.result.userAgent, /Linux/);
-      assert.match(result.result.platform, /Linux/);
+      assert.match(result.result.webgl.userAgent, /Linux/);
+      assert.match(result.result.webgl.platform, /Linux/);
     }
   } finally {
     await bw.close();
+    await site.close();
   }
 });
 
-test("managed sessions preserve native service-worker behavior", opts, async () => {
+test("blocking opt-out preserves native service-worker behavior", opts, async () => {
   const site = await listen((request, response) => {
     if (request.url === "/sw.js") {
       response.writeHead(200, {
@@ -222,7 +364,7 @@ test("managed sessions preserve native service-worker behavior", opts, async () 
     response.writeHead(200, { "content-type": "text/html" });
     response.end("<!doctype html><title>Service worker fixture</title>");
   });
-  const bw = new BetterWright({
+  const bw = new BetterWright({ adBlock: false,
     home: tempHome(),
     policy: new NetworkPolicy(),
     headless: true,
@@ -325,6 +467,8 @@ test("recording preserves page state and animation between browser calls", recor
         window.frameNumber = 0;
         const canvas = document.querySelector('canvas');
         const context = canvas.getContext('2d');
+        context.fillStyle = '#164e63';
+        context.fillRect(0, 0, 640, 360);
         const draw = () => {
           window.frameNumber += 1;
           context.fillStyle = '#164e63';
@@ -337,6 +481,7 @@ test("recording preserves page state and animation between browser calls", recor
         requestAnimationFrame(draw);
       });
       state.recordingDraft = 'preserved';
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const recordingState = await recording.start({ maxWidth: 640, maxHeight: 360 });
       const frames = await page.evaluate(() => {
         setTimeout(() => { window.reportAtFrame = window.frameNumber + 50; }, 1_500);
@@ -380,8 +525,13 @@ test("recording preserves page state and animation between browser calls", recor
     assert.ok(stopped.result.saved.bytes > 0);
     assert.equal(fs.statSync(stopped.result.saved.path).size, stopped.result.saved.bytes);
     assert.ok(stopped.artifacts.some((artifact) => artifact.kind === "recording" && artifact.path === stopped.result.saved.path && artifact.mimeType === "video/mp4"));
-    const decoded = spawnSync(encoder, ["-v", "error", "-i", stopped.result.saved.path, "-f", "null", "-"], { encoding: "utf8", timeout: 10_000 });
+    const decoded = spawnSync(encoder, ["-v", "error", "-i", stopped.result.saved.path, "-f", "framemd5", "-"], { encoding: "utf8", timeout: 10_000 });
     assert.equal(decoded.status, 0, decoded.stderr);
+    const frameHashes = decoded.stdout.split("\n")
+      .filter((line) => /^\d+,/.test(line))
+      .map((line) => line.split(",").at(-1).trim());
+    assert.ok(frameHashes.length > 1, "the saved recording contains multiple decoded frames");
+    assert.ok(new Set(frameHashes).size > 1, "the saved recording preserves visible animation");
   } finally {
     await bw.close();
     await site.close();
@@ -1389,6 +1539,56 @@ test("ordinary navigation attaches one compact UI directory automatically", opts
   } finally {
     await bw.close();
     await site.close();
+  }
+});
+
+test("action directory preserves shared contexts and refreshes them across scans and frames", opts, async () => {
+  const bw = new BetterWright({ home: tempHome(), headless: true, vault: false });
+  try {
+    const html = `<form><p>  First   context </p><button>Save</button><button>Save</button>
+      <input aria-label="Password" type="password" value="never-return-this"></form>
+      <section><p>${"Long context ".repeat(30)}</p><button>Choose</button><button>Choose</button></section>
+      <iframe name="settings" srcdoc="<form><p>Frame context</p><button>Save</button><button>Save</button></form>"></iframe>`;
+    const result = await bw.run(`
+      await page.setContent(${JSON.stringify(html)});
+      await page.frameLocator('iframe').getByRole('button', {name:'Save'}).first().waitFor();
+      return controls.directory();
+    `);
+    assert.equal(result.ok, true, result.error);
+    const controls = result.result.controls;
+    const saves = controls.filter((control) => control.target.name === "Save");
+    assert.deepEqual(saves.map((control) => ({ target: control.target, context: control.context })), [
+      { target: { role: "button", name: "Save", exact: true, nth: 0 }, context: "First context" },
+      { target: { role: "button", name: "Save", exact: true, nth: 1 }, context: "First context" },
+      { target: { role: "button", name: "Save", exact: true, nth: 0, frameName: "settings" }, context: "Frame context" },
+      { target: { role: "button", name: "Save", exact: true, nth: 1, frameName: "settings" }, context: "Frame context" },
+    ]);
+    const choices = controls.filter((control) => control.target.name === "Choose");
+    assert.equal(choices.length, 2);
+    assert.equal(choices[0].context.length, 180);
+    assert.equal(choices[1].context, choices[0].context);
+    assert.equal(controls.find((control) => control.target.label === "Password").value, "[redacted]");
+    assert.equal(JSON.stringify(result.result).includes("never-return-this"), false);
+
+    const changed = await bw.run(`
+      await page.locator('form p').evaluate(element => { element.textContent = 'Updated context'; });
+      return controls.directory();
+    `);
+    assert.equal(changed.ok, true, changed.error);
+    assert.deepEqual(changed.result.controls.filter((control) => control.target.name === "Save").map((control) => control.context), [
+      "Updated context", "Updated context", "Frame context", "Frame context",
+    ]);
+
+    const emptied = await bw.run(`
+      await page.locator('form p').evaluate(element => { element.textContent = ''; });
+      return controls.directory();
+    `);
+    assert.equal(emptied.ok, true, emptied.error);
+    assert.deepEqual(emptied.result.controls.filter((control) => control.target.name === "Save").map((control) => control.context), [
+      undefined, undefined, "Frame context", "Frame context",
+    ]);
+  } finally {
+    await bw.close();
   }
 });
 
@@ -2596,6 +2796,108 @@ test("interactive snapshots expose refs that aria-ref locators can act on", opts
   }
 });
 
+test("controls.batch accepts snapshot aria refs from frames", opts, async () => {
+  const bw = new BetterWright({ home: tempHome(), headless: true });
+  try {
+    const result = await bw.run(`
+      await page.setContent(\`
+        <button id="main">Main action</button>
+        <p id="mainStatus">main waiting</p>
+        <iframe name="outer" title="outer"></iframe>
+        <script>
+          document.querySelector('#main').addEventListener('click', () => {
+            document.querySelector('#mainStatus').textContent = 'main clicked';
+          });
+        </script>
+      \`);
+      const outer = page.frame({name: 'outer'});
+      await outer.setContent(\`
+        <button id="outerButton">Outer action</button>
+        <p id="outerStatus">outer waiting</p>
+        <iframe name="inner" title="inner"></iframe>
+        <script>
+          document.querySelector('#outerButton').addEventListener('click', () => {
+            document.querySelector('#outerStatus').textContent = 'outer clicked';
+          });
+        </script>
+      \`);
+      const inner = page.frame({name: 'inner'});
+      await inner.setContent(\`
+        <button id="deepPlain">Deep plain action</button>
+        <button id="deepPrefixed">Deep prefixed action</button>
+        <p id="deepPlainStatus">deep plain waiting</p>
+        <p id="deepPrefixedStatus">deep prefixed waiting</p>
+        <script>
+          document.querySelector('#deepPlain').addEventListener('click', () => {
+            document.querySelector('#deepPlainStatus').textContent = 'deep plain clicked';
+          });
+          document.querySelector('#deepPrefixed').addEventListener('click', () => {
+            document.querySelector('#deepPrefixedStatus').textContent = 'deep prefixed clicked';
+          });
+        </script>
+      \`);
+      const snap = await snapshot({interactive: true});
+      const refFor = (label) => {
+        const line = snap.split('\\n').find((entry) => entry.includes('button "' + label + '" [ref='));
+        const match = line?.match(/\\[ref=([^\\]]+)\\]/);
+        if (!match) throw new Error('missing ref for ' + label + '\\n' + snap);
+        return match[1];
+      };
+      const mainRef = refFor('Main action');
+      const outerRef = refFor('Outer action');
+      const deepPlainRef = refFor('Deep plain action');
+      const deepPrefixedRef = refFor('Deep prefixed action');
+      if (!/^e\\d+$/.test(mainRef)) throw new Error('expected main ref, got ' + mainRef);
+      for (const ref of [outerRef, deepPlainRef, deepPrefixedRef]) {
+        if (!/^(?:f\\d+)+e\\d+$/.test(ref)) throw new Error('expected frame ref, got ' + ref);
+      }
+      const run = async (id, ref, target, expected) => controls.batch({
+        operations: [
+          {id: 'click' + id, action: 'click', target: {ref}},
+          {id: 'read' + id, action: 'read', target, value: expected},
+        ],
+        allowWrites: true,
+        returnDirectory: false,
+      });
+      const main = await run('Main', mainRef, {css: '#mainStatus'}, 'main clicked');
+      const outerResult = await run('Outer', 'aria-ref=' + outerRef, {css: '#outerStatus', frameName: 'outer'}, 'outer clicked');
+      const deepPlain = await run('DeepPlain', deepPlainRef, {css: '#deepPlainStatus', frameName: 'inner'}, 'deep plain clicked');
+      const deepPrefixed = await run('DeepPrefixed', 'aria-ref=' + deepPrefixedRef, {css: '#deepPrefixedStatus', frameName: 'inner'}, 'deep prefixed clicked');
+      const invalid = await controls.batch({
+        operations: [
+          {id: 'clickBad', action: 'click', target: {ref: 'f1'}},
+          {id: 'readBad', action: 'read', target: {css: '#mainStatus'}, value: 'main clicked'},
+        ],
+        allowWrites: true,
+        returnDirectory: false,
+      }).then(
+        () => 'accepted',
+        (error) => String(error?.message || error),
+      );
+      return {
+        refs: {mainRef, outerRef, deepPlainRef, deepPrefixedRef},
+        main: main.results.readMain.text,
+        outer: outerResult.results.readOuter.text,
+        deepPlain: deepPlain.results.readDeepPlain.text,
+        deepPrefixed: deepPrefixed.results.readDeepPrefixed.text,
+        invalid,
+      };
+    `);
+    assert.equal(result.ok, true, result.error);
+    assert.match(result.result.refs.mainRef, /^e\d+$/);
+    assert.match(result.result.refs.outerRef, /^(?:f\d+)+e\d+$/);
+    assert.match(result.result.refs.deepPlainRef, /^(?:f\d+)+e\d+$/);
+    assert.match(result.result.refs.deepPrefixedRef, /^(?:f\d+)+e\d+$/);
+    assert.equal(result.result.main, "main clicked");
+    assert.equal(result.result.outer, "outer clicked");
+    assert.equal(result.result.deepPlain, "deep plain clicked");
+    assert.equal(result.result.deepPrefixed, "deep prefixed clicked");
+    assert.match(result.result.invalid, /invalid aria ref/);
+  } finally {
+    await bw.close();
+  }
+});
+
 test("WebMCP discovers and invokes a real page-published tool without exposing CDP", opts, async () => {
   const site = await listen((_request, response) => {
     response.writeHead(200, {"content-type": "text/html"});
@@ -3599,4 +3901,86 @@ test("MCP recording selects MP4 by default and preserves explicit WebM artifacts
   } finally {
     await bw.close();
   }
+});
+
+test("optional ad blocker covers pages, nested frames and popups while preserving policy", opts, async () => {
+  const hits: string[] = [];
+  const html = `<!doctype html><div class="bw-ad-slot">advertisement</div><input id="content">
+    <script src="/bw-ad.js"></script><script src="/bw-ad.js?allowed=1"></script>
+    <script src="/policy-denied.js"></script><script src="/policy-except.js"></script><script src="/replacement.js"></script>`;
+  const site = await listen((request, response) => {
+    hits.push(request.url);
+    if (request.url.includes(".js")) {
+      response.writeHead(200, { "content-type": "application/javascript" });
+      response.end(request.url === "/sw.js" ? "self.addEventListener('fetch', () => {})" : request.url.includes("allowed=1") ? "window.allowedAd=true" : "window.loadedAd=true");
+    } else {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end(request.url === "/" ? `${html}<iframe src="/child"></iframe><iframe src="/bw-ad-frame"></iframe>`
+        : request.url === "/child" ? `${html}<iframe src="/nested"></iframe>` : html);
+    }
+  });
+  try {
+    for (const adBlock of [false, true]) {
+      hits.length = 0;
+      const home = makeTempDir("bw-ad-browser-");
+      const runtime = path.join(home, "browser", "runtime");
+      if (adBlock) {
+        fs.mkdirSync(runtime, { recursive: true });
+        const blocker = PlaywrightBlocker.parse([
+          "/bw-ad.js$script", "@@/bw-ad.js?allowed=1$script", "/bw-ad-frame$subdocument",
+          "127.0.0.1##.bw-ad-slot", "/policy-denied.js$script,redirect=denied.js",
+          "/replacement.js$script,redirect=noop.js", "@@/policy-except.js$script",
+        ].join("\n"));
+        blocker.updateResources(JSON.stringify({ redirects: [
+          { name: "denied.js", aliases: [], contentType: "application/javascript", body: "window.policyBypassed=true" },
+          { name: "noop.js", aliases: [], contentType: "application/javascript;base64", body: Buffer.from("window.replacementLoaded=true").toString("base64") },
+        ], scriptlets: [] }), "fixture");
+        fs.writeFileSync(path.join(runtime, AD_BLOCK_CACHE_FILE), blocker.serialize());
+      }
+      const browser = new BetterWright({ home, headless: true, vault: false, adBlock,
+        policy: new NetworkPolicy({ custom: (url) => new URL(url).pathname.startsWith("/policy-") ? { allowed: false, reason: "fixture policy" } : null }),
+      });
+      try {
+        const result = await browser.run(`
+          await page.goto(${JSON.stringify(site.origin)});
+          await page.frameLocator('iframe[src="/child"]').frameLocator('iframe').locator('#content').fill('nested works');
+          await page.waitForTimeout(600);
+          const inspect = (frame) => frame.evaluate(() => ({
+            loadedAd: window.loadedAd === true, allowedAd: window.allowedAd === true,
+            policyBypassed: window.policyBypassed === true,
+            replacementLoaded: window.replacementLoaded === true,
+            hidden: getComputedStyle(document.querySelector('.bw-ad-slot')).display === 'none',
+          }));
+          const swRegistered = await page.evaluate(async () => Boolean(await navigator.serviceWorker.register('/sw.js')));
+          const main = await inspect(page);
+          const nested = await inspect(page.frames().find(f => f.url().endsWith('/nested')));
+          const value = await page.frameLocator('iframe[src="/child"]').frameLocator('iframe').locator('#content').inputValue();
+          const popupPromise = page.waitForEvent('popup');
+          await page.evaluate(() => window.open('/popup'));
+          const popup = await popupPromise;
+          await popup.waitForLoadState();
+          await popup.waitForTimeout(600);
+          return { main, popup: await inspect(popup), nested, value, swRegistered };
+        `);
+        assert.equal(result.ok, true, result.error);
+        assert.equal(result.result.value, "nested works");
+        assert.equal(result.result.swRegistered, !adBlock);
+        for (const state of [result.result.main, result.result.popup, result.result.nested]) {
+          assert.equal(state.loadedAd, !adBlock);
+          assert.equal(state.allowedAd, true);
+          assert.equal(state.policyBypassed, false);
+          assert.equal(state.replacementLoaded, adBlock);
+          assert.equal(state.hidden, adBlock);
+        }
+        assert.equal(hits.includes("/bw-ad.js"), !adBlock);
+        assert.equal(hits.includes("/bw-ad-frame"), !adBlock);
+        assert.equal(hits.includes("/policy-denied.js"), false);
+        assert.equal(hits.includes("/policy-except.js"), false);
+        if (!adBlock) assert.equal(fs.existsSync(path.join(runtime, AD_BLOCK_CACHE_FILE)), false);
+      } finally {
+        await browser.close();
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+    }
+  } finally { await site.close(); }
 });

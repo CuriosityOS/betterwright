@@ -127,12 +127,12 @@ test("managed fork args pin WebRTC to the proxy and the profile seed", () => {
   ]);
 });
 
-test("GPU-less Linux binds the SwiftShader software rasterizer", () => {
+test("GPU-less Linux binds the SwiftShader WebGL fallback", () => {
   assert.deepEqual(managedForkArgs("seed", { softwareGpu: true }), [
     "--webrtc-ip-handling-policy=disable_non_proxied_udp",
     "--renderer-process-limit=2",
     "--use-gl=angle",
-    "--use-angle=swiftshader",
+    "--use-angle=swiftshader-webgl",
     "--enable-unsafe-swiftshader",
     "--fingerprint=seed",
   ]);

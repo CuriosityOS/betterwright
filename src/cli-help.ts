@@ -232,6 +232,8 @@ Options:
                          BETTERWRIGHT_PROFILE sets one for the whole shell).
                          Use --session for parallel work as the same identity,
                          --profile for a different account.
+  --ad-block             block ads/trackers (default on; also BETTERWRIGHT_AD_BLOCK=1)
+  --no-ad-block           disable blocking, overriding the environment
   --headed               show the browser window
   --close                close the session after this call
   --approve-downloads    allow downloads for this one run
@@ -258,6 +260,8 @@ Example:
   betterwright run -c "await page.goto('https://example.com'); return page.title()"`,
 
   repl: `Usage: betterwright repl [options]
+
+--ad-block enables ad/tracker blocking; --no-ad-block overrides BETTERWRIGHT_AD_BLOCK.
 
 Read blank-line-separated snippets from stdin and run each one against the same
 live session, printing a JSON result per snippet. Ctrl-D quits.
@@ -351,7 +355,7 @@ Codex reads an instructions file instead (browser skill only):
 Site and password-manager knowledge packs the agent reads on demand. Run
 results hint at packs matching the open page; this is how you read one yourself.`,
 
-  mcp: `Usage: betterwright mcp [--check]
+  mcp: `Usage: betterwright mcp [--check] [--ad-block | --no-ad-block]
 
 Serve BetterWright over the Model Context Protocol on stdio. Exposes browser,
 browser_login, browser_download, browser_handoff, and browser_doctor.

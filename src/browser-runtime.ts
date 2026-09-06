@@ -119,16 +119,12 @@ export function managedForkArgs(fingerprintSeed, { softwareGpu = false } = {}) {
     // not retain an unused ~120 MiB process for a workload that already has a
     // warm persistent browser.
     "--renderer-process-limit=2",
-    // On a GPU-less Linux host, bind the software rasterizer explicitly. A
-    // runner with no /dev/dri render device does not reliably auto-init the
-    // GPU process, which leaves every WebGL context null; pointing ANGLE at
-    // SwiftShader makes the WebGL surface deterministic. The fork's WebGL
-    // patch swaps the unmasked renderer for a common integrated-GPU string,
-    // so this never leaks "SwiftShader" to the page.
+    // GPU-less Linux needs an explicit WebGL fallback. Keep SwiftShader
+    // scoped to WebGL instead of making it the general OpenGL ES driver.
     ...(softwareGpu
       ? [
           "--use-gl=angle",
-          "--use-angle=swiftshader",
+          "--use-angle=swiftshader-webgl",
           "--enable-unsafe-swiftshader",
         ]
       : // On a host WITH a GPU, the opposite risk applies: a headless launch

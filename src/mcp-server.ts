@@ -28,6 +28,7 @@
 //                                          save files autonomously; the browser
 //                                          tool cannot. allow: either tool.
 //                                          deny: no downloads.
+//     BETTERWRIGHT_AD_BLOCK=1              block ads and trackers (default on)
 //     BETTERWRIGHT_HEADLESS=0              run the managed browser headed
 //     BETTERWRIGHT_PROFILE=<name>          act as a named browser profile: a
 //                                          separate identity (own cookies, own
@@ -54,6 +55,7 @@
 import { createRequire } from "node:module";
 import type { DownloadPolicy } from "../types/common.js";
 import type { BetterWrightOptions } from "../types/public.js";
+import { resolveAdBlock } from "./ad-block-config.js";
 import {
   BetterWright,
   NetworkPolicy,
@@ -670,6 +672,7 @@ export async function runMcpServer(env = process.env, options: any = {}) {
   const browserOptions: BetterWrightOptions = {
     policy: policyFromEnv(env),
     headless: headlessFromEnv(env),
+    adBlock: resolveAdBlock(undefined, env),
     downloadPolicy,
     defaultTimeout: timeoutFromEnv(env),
   };

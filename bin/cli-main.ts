@@ -46,6 +46,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import { adBlockFromFlags } from "../src/ad-block-config.js";
 import { formatAgentUsage } from "../src/agent-usage.js";
 import { chromiumNeedsSoftwareGpu } from "../src/browser-runtime.js";
 import { configuredBrowserBackend } from "../src/chromium-fork.js";
@@ -294,6 +295,7 @@ function cliProfile(): string | null {
 // --locale/--timezone pin them explicitly.
 function browserOptionsFromFlags(flags) {
   const options: any = {
+    adBlock: adBlockFromFlags(flags),
     launchIdentity: !flags.has("--no-launch-identity"),
     upstreamProxy: flagValue(process.argv, "--upstream-proxy") || undefined,
     geoip: flags.has("--geoip"),
@@ -1058,6 +1060,7 @@ Shell note: double quotes still expand \`$\`. Use single quotes for literal pric
 Options: --stdin --model <id|source/id> --base-url <url> --api-key-env <name>
          --protocol chat|responses --effort <level> --session <name> --headed
          --profile <name> --live-view --fresh --close --no-daemon
+         --ad-block | --no-ad-block (default on; BETTERWRIGHT_AD_BLOCK=1)
 
 Repeated execs continue the same session: the browser (tabs, logins) stays
 live in a background daemon and the agent remembers the prior conversation.
@@ -1673,6 +1676,7 @@ async function cmdExec(flags) {
         history,
         policy,
         headless: !flags.has("--headed"),
+        adBlock: adBlockFromFlags(flags),
         liveView: liveViewCliOptions(argv),
         onStep,
         onPhase: (event) => spinner.setLabel(phaseLabel(event)),
@@ -2296,7 +2300,10 @@ export async function runCli() {
         return ok ? 0 : 1;
       }
       const { runMcpServer } = await import("../src/mcp-server.js");
-      await runMcpServer();
+      await runMcpServer({
+        ...process.env,
+        BETTERWRIGHT_AD_BLOCK: adBlockFromFlags(flags) ? "1" : "0",
+      });
       return 0;
     }
     case "__daemon": {

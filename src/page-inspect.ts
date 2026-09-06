@@ -224,6 +224,7 @@ export async function inspectActionDirectory(page) {
         if (type === "search") return "searchbox";
         return "textbox";
       };
+      const contexts = new Map<Element, string>();
       const contextFor = (element) => {
         let root = element.closest("article,li,[role='listitem'],form,section");
         if (!root) {
@@ -234,11 +235,15 @@ export async function inspectActionDirectory(page) {
           }
         }
         if (!root) return "";
+        const cached = contexts.get(root);
+        if (cached !== undefined) return cached;
         const copy = root.cloneNode(true);
         for (const control of copy.querySelectorAll(
           "button,input,select,textarea,[role='button'],[role='link']",
         )) control.remove();
-        return clean(copy.textContent, 180);
+        const context = clean(copy.textContent, 180);
+        contexts.set(root, context);
+        return context;
       };
       const candidates = [...document.querySelectorAll([
         "button", "input", "select", "textarea", "a[href]",

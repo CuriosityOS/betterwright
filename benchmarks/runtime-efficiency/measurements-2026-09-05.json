@@ -1,0 +1,1315 @@
+{
+  "measuredOn": "2026-09-05",
+  "host": {
+    "platform": "Linux x64",
+    "cpu": "AMD Ryzen 9 7950X3D",
+    "bun": "1.4.0",
+    "browserSha256": "22e4d5ef0c637a87b59a9baad42625aba3284dc03d4a5908748e253556318c97"
+  },
+  "notes": [
+    "Workload-specific measurements; no universal speed or memory claim.",
+    "RSS sums process resident memory and can count shared pages more than once.",
+    "Video checks decode the first 60 frames, not each complete recording.",
+    "Directory equality checks cover six setup directory pairs; timed groups are performance samples.",
+    "Directory samples are milliseconds per scan, averaged over groups of five scans after five warmup groups.",
+    "Graphics worktreeBaseCommit identifies the common checkout base; graphicsVariants records the differing software rendering arguments used by the built variants."
+  ],
+  "graphics": [
+    {
+      "role": "baseline",
+      "repetition": 1,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.013015708012972,
+          "cpuSeconds": 5.93,
+          "gpuCpuSeconds": 4.31,
+          "summedRssMiB": 1337.84375
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04416770598618314,
+          "cpuSeconds": 0.07999999999999993,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1342.5546875
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011668080987874,
+          "cpuSeconds": 0.07000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1341.83203125
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.6575798359990586,
+          "cpuSeconds": 1.9100000000000006,
+          "gpuCpuSeconds": 1.7600000000000007,
+          "summedRssMiB": 1379.51171875
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5080815620021895,
+          "cpuSeconds": 5.319999999999999,
+          "gpuCpuSeconds": 5.029999999999999,
+          "summedRssMiB": 1396.10546875
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 1,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.012684440996964,
+          "cpuSeconds": 2.0300000000000002,
+          "gpuCpuSeconds": 0.2,
+          "summedRssMiB": 1329.3984375
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04428050300339237,
+          "cpuSeconds": 0.08999999999999996,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1333.98046875
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011541037005372,
+          "cpuSeconds": 0.05000000000000003,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1333.046875
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5801845359965228,
+          "cpuSeconds": 0.2799999999999999,
+          "gpuCpuSeconds": 0.13,
+          "summedRssMiB": 1392.0625
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5109169200004544,
+          "cpuSeconds": 0.5900000000000001,
+          "gpuCpuSeconds": 0.29,
+          "summedRssMiB": 1403.08984375
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        154,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            154,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            27,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "baseline",
+      "repetition": 2,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.013031142996624,
+          "cpuSeconds": 6.1000000000000005,
+          "gpuCpuSeconds": 4.53,
+          "summedRssMiB": 1337.38671875
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04356454001390375,
+          "cpuSeconds": 0.07000000000000005,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1342.65625
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011985099990852,
+          "cpuSeconds": 0.10999999999999997,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1339.2421875
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.6527319439919665,
+          "cpuSeconds": 1.8799999999999992,
+          "gpuCpuSeconds": 1.7399999999999993,
+          "summedRssMiB": 1377.41796875
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5080958099861164,
+          "cpuSeconds": 5.4,
+          "gpuCpuSeconds": 5.07,
+          "summedRssMiB": 1393.859375
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        152,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            152,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            25,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 2,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.013056076975772,
+          "cpuSeconds": 2.14,
+          "gpuCpuSeconds": 0.22000000000000003,
+          "summedRssMiB": 1351.7578125
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04750412001158111,
+          "cpuSeconds": 0.08000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1356.41015625
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011812936019851,
+          "cpuSeconds": 0.06999999999999995,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1355.1953125
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5973166050098371,
+          "cpuSeconds": 0.30000000000000004,
+          "gpuCpuSeconds": 0.13999999999999996,
+          "summedRssMiB": 1413.953125
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5065843320044223,
+          "cpuSeconds": 0.57,
+          "gpuCpuSeconds": 0.27,
+          "summedRssMiB": 1424.90234375
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "baseline",
+      "repetition": 3,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.011473359016236,
+          "cpuSeconds": 5.55,
+          "gpuCpuSeconds": 3.97,
+          "summedRssMiB": 1336.84375
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04933380501461215,
+          "cpuSeconds": 0.07000000000000005,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1341.79296875
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011587341985432,
+          "cpuSeconds": 0.06000000000000004,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1340.8984375
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.664906885009259,
+          "cpuSeconds": 2.159999999999999,
+          "gpuCpuSeconds": 1.979999999999999,
+          "summedRssMiB": 1378.09375
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5078393449948635,
+          "cpuSeconds": 5.340000000000001,
+          "gpuCpuSeconds": 5.0600000000000005,
+          "summedRssMiB": 1394.08203125
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        154,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            154,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            27,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 3,
+      "order": "forward",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.011485232011182,
+          "cpuSeconds": 2.0,
+          "gpuCpuSeconds": 0.21000000000000002,
+          "summedRssMiB": 1326.73828125
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04631915799109265,
+          "cpuSeconds": 0.07000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1331.97265625
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011524413974257,
+          "cpuSeconds": 0.08000000000000004,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1327.44921875
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5857733259908855,
+          "cpuSeconds": 0.29999999999999993,
+          "gpuCpuSeconds": 0.12999999999999995,
+          "summedRssMiB": 1388.234375
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5095930410025176,
+          "cpuSeconds": 0.5799999999999998,
+          "gpuCpuSeconds": 0.30000000000000004,
+          "summedRssMiB": 1398.56640625
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 1,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.011596841010032,
+          "cpuSeconds": 2.0100000000000002,
+          "gpuCpuSeconds": 0.21,
+          "summedRssMiB": 1337.97265625
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04446216599899344,
+          "cpuSeconds": 0.07999999999999995,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1342.875
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.01143417597632,
+          "cpuSeconds": 0.060000000000000026,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1341.8828125
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5932927239919081,
+          "cpuSeconds": 0.29,
+          "gpuCpuSeconds": 0.13999999999999999,
+          "summedRssMiB": 1403.19140625
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5095586079987697,
+          "cpuSeconds": 0.6400000000000002,
+          "gpuCpuSeconds": 0.32000000000000006,
+          "summedRssMiB": 1414.00390625
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "baseline",
+      "repetition": 1,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.012102645996492,
+          "cpuSeconds": 6.17,
+          "gpuCpuSeconds": 4.52,
+          "summedRssMiB": 1331.65625
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04793037299532443,
+          "cpuSeconds": 0.08000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1336.7734375
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.012095521989977,
+          "cpuSeconds": 0.05999999999999994,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1334.8359375
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.6710228529991582,
+          "cpuSeconds": 2.27,
+          "gpuCpuSeconds": 2.08,
+          "summedRssMiB": 1374.5625
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5028655960049946,
+          "cpuSeconds": 5.4,
+          "gpuCpuSeconds": 5.07,
+          "summedRssMiB": 1389.921875
+        }
+      ],
+      "canvas2d": [
+        51,
+        101,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            101,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            75,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 2,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.013278109021485,
+          "cpuSeconds": 2.0100000000000002,
+          "gpuCpuSeconds": 0.21000000000000002,
+          "summedRssMiB": 1330.79296875
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.048356626997701824,
+          "cpuSeconds": 0.06000000000000005,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1335.66015625
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.012280747003388,
+          "cpuSeconds": 0.06999999999999983,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1334.578125
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5912623800104484,
+          "cpuSeconds": 0.29000000000000004,
+          "gpuCpuSeconds": 0.13999999999999996,
+          "summedRssMiB": 1399.00390625
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5098566289816517,
+          "cpuSeconds": 0.5900000000000002,
+          "gpuCpuSeconds": 0.30000000000000004,
+          "summedRssMiB": 1408.890625
+        }
+      ],
+      "canvas2d": [
+        52,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            52,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            205,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "baseline",
+      "repetition": 2,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.012010033999104,
+          "cpuSeconds": 5.54,
+          "gpuCpuSeconds": 3.9699999999999998,
+          "summedRssMiB": 1321.8359375
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04466401299578138,
+          "cpuSeconds": 0.07000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1327.42578125
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.011598028999288,
+          "cpuSeconds": 0.10000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1323.49609375
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.6838460800063331,
+          "cpuSeconds": 2.4800000000000004,
+          "gpuCpuSeconds": 2.3100000000000005,
+          "summedRssMiB": 1370.078125
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5078595310042147,
+          "cpuSeconds": 4.97,
+          "gpuCpuSeconds": 4.659999999999999,
+          "summedRssMiB": 1384.68359375
+        }
+      ],
+      "canvas2d": [
+        50,
+        102,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            50,
+            102,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            203,
+            76,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "candidate",
+      "repetition": 3,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.012290245998884,
+          "cpuSeconds": 1.98,
+          "gpuCpuSeconds": 0.21000000000000002,
+          "summedRssMiB": 1325.80078125
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.046795279980869964,
+          "cpuSeconds": 0.05999999999999993,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1330.953125
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.013065576000372,
+          "cpuSeconds": 0.07000000000000003,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1330.046875
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.5824772820051294,
+          "cpuSeconds": 0.2700000000000001,
+          "gpuCpuSeconds": 0.13,
+          "summedRssMiB": 1388.47265625
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5080601889931131,
+          "cpuSeconds": 0.5799999999999998,
+          "gpuCpuSeconds": 0.29,
+          "summedRssMiB": 1399.6328125
+        }
+      ],
+      "canvas2d": [
+        51,
+        103,
+        153,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            103,
+            153,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            77,
+            26,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 86,
+        "droppedFrames": 0
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    },
+    {
+      "role": "baseline",
+      "repetition": 3,
+      "order": "reverse",
+      "phases": [
+        {
+          "phase": "idle-10-seconds",
+          "wallSeconds": 10.012197634001495,
+          "cpuSeconds": 6.01,
+          "gpuCpuSeconds": 4.43,
+          "summedRssMiB": 1334.2421875
+        },
+        {
+          "phase": "ten-simple-DOM-reads",
+          "wallSeconds": 0.04779382998822257,
+          "cpuSeconds": 0.08000000000000006,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1339.765625
+        },
+        {
+          "phase": "idle-after-reads-10-seconds",
+          "wallSeconds": 10.012785364990123,
+          "cpuSeconds": 0.10999999999999997,
+          "gpuCpuSeconds": 0.0,
+          "summedRssMiB": 1335.86328125
+        },
+        {
+          "phase": "rendering-probe",
+          "wallSeconds": 0.6584477779979352,
+          "cpuSeconds": 2.16,
+          "gpuCpuSeconds": 2.0,
+          "summedRssMiB": 1372.5546875
+        },
+        {
+          "phase": "recording-probe",
+          "wallSeconds": 1.5069749650137965,
+          "cpuSeconds": 5.3500000000000005,
+          "gpuCpuSeconds": 5.0600000000000005,
+          "summedRssMiB": 1388.921875
+        }
+      ],
+      "canvas2d": [
+        51,
+        102,
+        154,
+        255
+      ],
+      "webgl": {
+        "webgl": {
+          "available": true,
+          "pixels": [
+            51,
+            102,
+            154,
+            255
+          ]
+        },
+        "webgl2": {
+          "available": true,
+          "pixels": [
+            204,
+            76,
+            27,
+            255
+          ]
+        }
+      },
+      "recording": {
+        "fps": 60,
+        "capturedFrames": 86,
+        "outputFrames": 85,
+        "droppedFrames": 1
+      },
+      "decodedPrefix": {
+        "frames_decoded": 60,
+        "unique_full_frame_hashes": 60,
+        "adjacent_pairs": 59,
+        "changed_adjacent_pairs": 59
+      },
+      "worktreeBaseCommit": "432c2259b2ab6ab710b1a1e04ede4cfb9804c646"
+    }
+  ],
+  "directoryScans": [
+    {
+      "order": "forward",
+      "shape": "normal",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          1.4,
+          1.8,
+          1.4,
+          1.6,
+          1.6,
+          1.2,
+          1.6,
+          1.8,
+          1.4,
+          1.6,
+          1.4,
+          1.4,
+          1.4,
+          1.6,
+          1.4,
+          1.8,
+          1.4,
+          1.4,
+          1.4,
+          1.6
+        ],
+        "candidate": [
+          1.4,
+          1.2,
+          1.6,
+          1.2,
+          1.2,
+          1.2,
+          1.4,
+          1.2,
+          1.4,
+          1.4,
+          1.2,
+          1.2,
+          1.2,
+          1.2,
+          1.4,
+          1.2,
+          1.2,
+          1.2,
+          1.4,
+          1.4
+        ]
+      }
+    },
+    {
+      "order": "forward",
+      "shape": "sharedLarge",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          53.8,
+          54.2,
+          53.6,
+          52.8,
+          53.8,
+          52,
+          52.2,
+          51.6,
+          53.4,
+          52.2,
+          51.8,
+          51.8,
+          52.6,
+          53,
+          52.4,
+          53.4,
+          52.6,
+          53.2,
+          51,
+          52.2
+        ],
+        "candidate": [
+          4.8,
+          5.4,
+          5.4,
+          5.2,
+          6.2,
+          6.4,
+          7.4,
+          5.6,
+          5,
+          5.4,
+          6,
+          5.4,
+          5.4,
+          4.8,
+          5.2,
+          5,
+          4.6,
+          4.8,
+          4.8,
+          5
+        ]
+      }
+    },
+    {
+      "order": "forward",
+      "shape": "distinct",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          3,
+          2.4,
+          2.4,
+          2.2,
+          2.6,
+          2.2,
+          2.4,
+          2.4,
+          2.4,
+          2.2,
+          2.4,
+          2.4,
+          2.2,
+          2.4,
+          2.4,
+          2.4,
+          2.2,
+          2.6,
+          2.4,
+          2.2
+        ],
+        "candidate": [
+          3,
+          2.4,
+          2.6,
+          2.6,
+          2.6,
+          2.4,
+          2.6,
+          2.8,
+          2.6,
+          2.8,
+          2.8,
+          2.6,
+          2.6,
+          2.4,
+          2.8,
+          2.4,
+          2.4,
+          3,
+          2.8,
+          2.8
+        ]
+      }
+    },
+    {
+      "order": "reverse",
+      "shape": "normal",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          1.6,
+          2,
+          1.4,
+          1.6,
+          1.4,
+          1.8,
+          1.4,
+          1.6,
+          1.6,
+          1.4,
+          1.8,
+          1.6,
+          1.6,
+          1.6,
+          1.6,
+          1.6,
+          1.6,
+          1.6,
+          1.6,
+          1.8
+        ],
+        "candidate": [
+          1.4,
+          1.6,
+          1.4,
+          1.4,
+          1.4,
+          1.4,
+          1.4,
+          1.4,
+          1.4,
+          1.4,
+          1.6,
+          1.4,
+          1.2,
+          1.4,
+          1.4,
+          1.4,
+          1.6,
+          1.2,
+          1.2,
+          1.2
+        ]
+      }
+    },
+    {
+      "order": "reverse",
+      "shape": "sharedLarge",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          53.2,
+          53.2,
+          55,
+          53,
+          53.4,
+          59.8,
+          52.6,
+          54.2,
+          54.4,
+          53.6,
+          53.2,
+          54,
+          54.4,
+          55.6,
+          54,
+          58,
+          58.4,
+          54.2,
+          58,
+          52.4
+        ],
+        "candidate": [
+          5.2,
+          5.6,
+          5.6,
+          6.8,
+          4.8,
+          6.4,
+          5.6,
+          4.6,
+          4.4,
+          4.6,
+          5.2,
+          4.6,
+          4.8,
+          4.4,
+          4.8,
+          4.6,
+          4.6,
+          4.4,
+          5.2,
+          4.6
+        ]
+      }
+    },
+    {
+      "order": "reverse",
+      "shape": "distinct",
+      "equalSetupDirectories": true,
+      "samplesByRole": {
+        "baseline": [
+          2.6,
+          2.6,
+          2.6,
+          3,
+          2.6,
+          2.6,
+          2.8,
+          2.6,
+          2.4,
+          2.6,
+          2.8,
+          2.6,
+          2.4,
+          2.4,
+          2.6,
+          2.6,
+          2.4,
+          2.6,
+          2.4,
+          2.4
+        ],
+        "candidate": [
+          2.8,
+          2.4,
+          2.4,
+          2.2,
+          2.6,
+          2.2,
+          2.4,
+          2.6,
+          2.4,
+          2.2,
+          2.4,
+          2.4,
+          2.4,
+          2.2,
+          2.4,
+          2.6,
+          2.2,
+          2.4,
+          2.6,
+          2.2
+        ]
+      }
+    }
+  ],
+  "graphicsVariants": {
+    "baseline": {
+      "softwareRenderingArgs": [
+        "--use-gl=angle",
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader"
+      ]
+    },
+    "candidate": {
+      "softwareRenderingArgs": [
+        "--use-gl=angle",
+        "--use-angle=swiftshader-webgl",
+        "--enable-unsafe-swiftshader"
+      ]
+    }
+  }
+}

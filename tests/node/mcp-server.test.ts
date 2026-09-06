@@ -573,6 +573,32 @@ test("contentForResult carries a synthesized compact UI directory", async () => 
   assert.equal(JSON.parse(content.text).ui.tool, "browser_batch");
 });
 
+test("MCP repeats complete JSON observations for successive calls in one session", async () => {
+  const observation = {
+    ok: true,
+    result: null,
+    console: [{ type: "log", text: "page inspected" }],
+    pages: [{ pageId: "p1", url: "https://example.test", title: "Settings", active: true }],
+    warnings: ["Browser runtime warning"],
+    ui: {
+      protocol: "betterwright-ui/1",
+      tool: "browser_batch",
+      controls: [{ target: { label: "Name", exact: true }, actions: ["fill", "read"], value: "Alex" }],
+    },
+  };
+  const handlers = _createMcpHandlersForTest({
+    browser: { vault: false, async run() { return observation; } },
+    downloadPolicy: "deny",
+  });
+  for (let call = 0; call < 2; call += 1) {
+    const response = await handlers.callTool({ params: {
+      name: "browser", arguments: { code: "return null", session: "same-session" },
+    } });
+    assert.equal(response.isError, undefined);
+    assert.deepEqual(JSON.parse(response.content[0].text), observation);
+  }
+});
+
 test("liveViewFromEnv defaults to LAN bind and disabled remote exposure", () => {
   assert.deepEqual(liveViewFromEnv({}, {}), {
     enabled: false,
