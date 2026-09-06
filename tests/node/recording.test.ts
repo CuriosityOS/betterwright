@@ -29,8 +29,8 @@ class FakeCdp extends EventEmitter {
     }
     return {};
   }
-  frame(data = fixture.toString("base64")) {
-    this.emit("Page.screencastFrame", { data, sessionId: 1, metadata: { timestamp: Date.now() / 1000 } });
+  frame(data = fixture.toString("base64"), timestamp = Date.now() / 1000) {
+    this.emit("Page.screencastFrame", { data, sessionId: 1, metadata: { timestamp } });
   }
   async detach() { this.detached++; this.emit("close"); }
 }
@@ -218,7 +218,10 @@ test("slow encoder input and delayed timers preserve elapsed duration with bound
   const recording = await startRecording({ cdp, path: output, options, maxBytes: 1_000_000 });
   cdp.frame(large);
   await delay(30);
-  for (let i = 0; i < 20; i++) cdp.frame(large);
+  // A synthetic burst shares a capture time even when decoding its payloads
+  // takes multiple output-frame intervals on a busy runner.
+  const burstTimestamp = Date.now() / 1000;
+  for (let i = 0; i < 20; i++) cdp.frame(large, burstTimestamp);
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
   await delay(70);
   const result = await recording.stop();
