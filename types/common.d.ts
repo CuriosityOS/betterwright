@@ -22,8 +22,6 @@ export interface BetterWrightArtifact {
   path?: string;
   media?: string;
   size?: number;
-  /** Downscaled model-facing companion of a proof screenshot, when written. */
-  inlinePath?: string;
   [key: string]: UntrustedValue;
 }
 

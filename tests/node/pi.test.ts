@@ -81,42 +81,6 @@ test("Pi trace evidence prefers the latest non-challenge screenshot", () => {
   );
 });
 
-test("Pi image artifacts prefer an inline companion and still deduplicate", () => {
-  const screenshot = path.join(os.tmpdir(), "betterwright-proof.png");
-  const inline = `${screenshot}.inline.png`;
-  assert.deepEqual(
-    piImageArtifacts({
-      artifacts: [
-        { kind: "proof", path: screenshot, media: `MEDIA:${screenshot}`, inlinePath: inline },
-        { kind: "proof", path: screenshot, media: `MEDIA:${screenshot}` },
-      ],
-    }),
-    [{ path: inline, mimeType: "image/png" }],
-  );
-  assert.deepEqual(
-    piImageArtifacts({
-      artifacts: [
-        { kind: "proof", path: screenshot },
-        { kind: "proof", path: screenshot, inlinePath: "relative.inline.png" },
-        { kind: "proof", path: screenshot, inlinePath: 42 },
-      ],
-    }),
-    [{ path: screenshot, mimeType: "image/png" }],
-  );
-});
-
-test("Pi trace evidence keeps the full-fidelity screenshot path", () => {
-  const proof = path.join(os.tmpdir(), "betterwright-proof.png");
-  assert.deepEqual(
-    piPrimaryImageArtifact({
-      artifacts: [
-        { kind: "proof", path: proof, inlinePath: `${proof}.inline.png` },
-      ],
-    }),
-    { path: proof, mimeType: "image/png" },
-  );
-});
-
 test("Pi image adapter ignores spilled output and oversized images", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "betterwright-pi-"));
   const spill = path.join(dir, "browser-output.json");

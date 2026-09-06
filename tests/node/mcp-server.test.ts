@@ -118,71 +118,6 @@ test("MCP recording returns worker failure details", async () => {
   assert.deepEqual(JSON.parse(response.content[0].text), { ok: false, error: "FFmpeg is unavailable" });
 });
 
-test("MCP inlines the companion bytes of a proof screenshot, never the full path", async () => {
-  const dir = makeTempDir("betterwright-mcp-");
-  const full = path.join(dir, "proof.png");
-  const inline = `${full}.inline.png`;
-  fs.writeFileSync(full, "full fidelity bytes");
-  fs.writeFileSync(inline, "inline bytes");
-  const handlers = _createMcpHandlersForTest({
-    browser: {
-      vault: false,
-      async run() {
-        return {
-          ok: true,
-          artifacts: [
-            { kind: "proof", path: full, media: `MEDIA:${full}`, inlinePath: inline },
-          ],
-        };
-      },
-    },
-    downloadPolicy: "deny",
-  });
-  const response = await handlers.callTool({
-    params: { name: "browser", arguments: { code: "return 1" } },
-  });
-  assert.equal(response.isError, undefined, response.content[0].text);
-  const summary = JSON.parse(response.content[0].text);
-  assert.equal(summary.ok, true);
-  assert.equal(summary.files, undefined);
-  assert.deepEqual(response.content.slice(1), [
-    {
-      type: "image",
-      data: Buffer.from("inline bytes").toString("base64"),
-      mimeType: "image/png",
-    },
-  ]);
-});
-
-test("MCP inlines the full proof screenshot when no companion was written", async () => {
-  const dir = makeTempDir("betterwright-mcp-");
-  const full = path.join(dir, "proof.png");
-  fs.writeFileSync(full, "full fidelity bytes");
-  const handlers = _createMcpHandlersForTest({
-    browser: {
-      vault: false,
-      async run() {
-        return {
-          ok: true,
-          artifacts: [{ kind: "proof", path: full, media: `MEDIA:${full}` }],
-        };
-      },
-    },
-    downloadPolicy: "deny",
-  });
-  const response = await handlers.callTool({
-    params: { name: "browser", arguments: { code: "return 1" } },
-  });
-  assert.equal(response.isError, undefined, response.content[0].text);
-  assert.deepEqual(response.content.slice(1), [
-    {
-      type: "image",
-      data: Buffer.from("full fidelity bytes").toString("base64"),
-      mimeType: "image/png",
-    },
-  ]);
-});
-
 test("MCP advertises and dispatches browser_login when a vault is available", async () => {
   const calls = [];
   const handlers = _createMcpHandlersForTest({
@@ -427,7 +362,7 @@ test("the advertised MCP tool list stays inside its context budget", async () =>
   // Collapse runs of whitespace: line wrapping is nearly free in characters but
   // costs a token per line, so raw length would understate a rewrap regression.
   const size = JSON.stringify(tools.filter((tool) => tool.name !== "browser_record")).replace(/\s+/g, " ").length;
-  assert.ok(size < 7_200, `MCP tool list grew to ${size} collapsed characters`);
+  assert.ok(size < 7_250, `MCP tool list grew to ${size} collapsed characters`);
   const recordingSize = JSON.stringify(tools.find((tool) => tool.name === "browser_record")).replace(/\s+/g, " ").length;
   assert.ok(recordingSize < 1_000, `recording tool grew to ${recordingSize} collapsed characters`);
 
@@ -456,9 +391,9 @@ test("the advertised MCP tool list stays inside its context budget", async () =>
   assert.match(text("browser"), /addInitScript before goto/);
   assert.match(text("browser"), /setContent/);
   assert.match(text("browser"), /host fixture/);
-  // Challenge limits are safety rules, not advice. Solving mechanics are
-  // delivered just in time on the challenge report's advice field instead.
+  // Challenge limits are safety rules, not advice.
   assert.match(text("browser"), /three distinct challenge types/);
+  assert.match(text("browser"), /Replacement photo grids are the same stage/);
   assert.match(text("browser"), /Never duplicate a submission, purchase, or message/);
   assert.match(text("browser"), /webagents\.discover\(\)/);
   assert.match(text("browser"), /webagents\.batch\(\)/);
@@ -624,37 +559,6 @@ test("contentForResult carries a discovered WebAgents directory", async () => {
   });
 });
 
-// A null result alongside console output means the call logged where it
-// should have returned; the hint points at the console data so the model
-// reuses it instead of re-running the same read.
-test("contentForResult hints when a call logs but returns null", async () => {
-  const [hinted] = await contentForResult({
-    ok: true,
-    result: null,
-    console: [{ level: "log", text: "page body text" }],
-  });
-  assert.match(JSON.parse(hinted.text).hint, /returned null/);
-  assert.match(JSON.parse(hinted.text).hint, /use return to capture/);
-
-  const [withResult] = await contentForResult({
-    ok: true,
-    result: "data",
-    console: [{ level: "log", text: "noise" }],
-  });
-  assert.equal(JSON.parse(withResult.text).hint, undefined);
-
-  const [noConsole] = await contentForResult({ ok: true, result: null });
-  assert.equal(JSON.parse(noConsole.text).hint, undefined);
-
-  const [failed] = await contentForResult({
-    ok: false,
-    result: null,
-    error: "boom",
-    console: [{ level: "log", text: "noise" }],
-  });
-  assert.equal(JSON.parse(failed.text).hint, undefined);
-});
-
 test("contentForResult carries a synthesized compact UI directory", async () => {
   const [content] = await contentForResult({
     ok: true,
@@ -669,268 +573,30 @@ test("contentForResult carries a synthesized compact UI directory", async () => 
   assert.equal(JSON.parse(content.text).ui.tool, "browser_batch");
 });
 
-// The MCP layer renders action directories as one numbered text line per row;
-// the worker's own result keeps the JSON object. Any row shape the renderer
-// does not recognize fails safe: the whole directory stays JSON.
-test("contentForResult renders action directories as numbered lines", async () => {
-  const [content] = await contentForResult({
+test("MCP repeats complete JSON observations for successive calls in one session", async () => {
+  const observation = {
     ok: true,
-    result: "opened",
+    result: null,
+    console: [{ type: "log", text: "page inspected" }],
+    pages: [{ pageId: "p1", url: "https://example.test", title: "Settings", active: true }],
+    warnings: ["Browser runtime warning"],
     ui: {
       protocol: "betterwright-ui/1",
       tool: "browser_batch",
-      controls: [
-        {
-          target: { role: "combobox", name: "Connection", exact: true },
-          actions: ["select", "read"],
-          value: "All",
-          options: [["All", "All", true], ["USB-C", "USB-C", false], ["HDMI", "HDMI", false]],
-        },
-        {
-          target: { label: "Maximum price ($)", exact: true },
-          actions: ["fill", "read"],
-          value: "500",
-        },
-        {
-          target: { label: "In stock only", exact: true },
-          actions: ["check", "read"],
-          value: "on",
-          checked: false,
-        },
-      ],
-      truncated: false,
+      controls: [{ target: { label: "Name", exact: true }, actions: ["fill", "read"], value: "Alex" }],
     },
+  };
+  const handlers = _createMcpHandlersForTest({
+    browser: { vault: false, async run() { return observation; } },
+    downloadPolicy: "deny",
   });
-  assert.equal(
-    JSON.parse(content.text).ui,
-    [
-      '1. combobox "Connection" value="All" options[All*|USB-C|HDMI] select,read',
-      '2. label "Maximum price ($)" value="500" fill,read',
-      '3. label "In stock only" unchecked check,read',
-      '{"protocol":"betterwright-ui/1","tool":"browser_batch","truncated":false}',
-    ].join("\n"),
-  );
-});
-
-test("contentForResult renders option, state, disabled, and frame row parts in order", async () => {
-  const [content] = await contentForResult({
-    ok: true,
-    result: "opened",
-    ui: {
-      controls: [
-        {
-          target: { role: "combobox", name: "Size", exact: true },
-          actions: ["select", "read"],
-          value: "10",
-          options: [["Ten", "10", true], ["Twenty", "20", false]],
-          disabled: true,
-        },
-        {
-          target: { role: "checkbox", name: "Wrap", exact: true },
-          actions: ["check", "read"],
-          value: "yes",
-          checked: true,
-        },
-        {
-          target: { role: "button", name: "Pay", exact: true, frameUrlIncludes: "payments.example" },
-          actions: ["click", "read"],
-        },
-      ],
-    },
-  });
-  assert.equal(
-    JSON.parse(content.text).ui,
-    [
-      '1. combobox "Size" value="10" options[10=Ten*|20=Twenty] disabled select,read',
-      // A checkable row's value is the form-submission value; only state shows.
-      '2. checkbox "Wrap" checked check,read',
-      '3. button "Pay" f:"payments.example" click,read',
-    ].join("\n"),
-  );
-});
-
-test("contentForResult escapes quotes, newlines, and option delimiters", async () => {
-  const [content] = await contentForResult({
-    ok: true,
-    result: "opened",
-    ui: {
-      controls: [
-        {
-          target: { role: "button", name: 'Say "hi"\nthen stop', exact: true },
-          actions: ["click", "read"],
-        },
-        {
-          target: { role: "combobox", name: "Pick", exact: true },
-          actions: ["select", "read"],
-          options: [["a|b", "a|b", false], ["star*", "star*", true], ["eq", "x=y", false]],
-        },
-      ],
-    },
-  });
-  assert.equal(
-    JSON.parse(content.text).ui,
-    [
-      '1. button "Say \\"hi\\"\\nthen stop" click,read',
-      '2. combobox "Pick" options["a|b"|"star*"*|"x=y"=eq] select,read',
-    ].join("\n"),
-  );
-});
-
-test("contentForResult leaves non-conforming directories as JSON", async () => {
-  const cases: [string, object][] = [
-    ["empty controls", { protocol: "betterwright-ui/1", controls: [] }],
-    ["unknown row field", {
-      controls: [{ target: { role: "button", name: "Go", exact: true }, actions: ["click"], context: "nav" }],
-    }],
-    ["unknown target keyset", {
-      controls: [{ target: { placeholder: "Search", exact: true }, actions: ["fill", "read"] }],
-    }],
-    ["non-exact target", {
-      controls: [{ target: { role: "button", name: "Go", exact: false }, actions: ["click"] }],
-    }],
-    ["role-only target", {
-      controls: [{ target: { role: "button", exact: true }, actions: ["click"] }],
-    }],
-    ["numbered target", {
-      controls: [{ target: { role: "link", name: "Next", exact: true, nth: 1 }, actions: ["click", "read"] }],
-    }],
-    ["non-boolean checked", {
-      controls: [{ target: { role: "checkbox", name: "Wrap", exact: true }, actions: ["check", "read"], checked: "yes" }],
-    }],
-  ];
-  for (const [name, ui] of cases) {
-    const [content] = await contentForResult({ ok: true, result: "opened", ui });
-    assert.deepEqual(JSON.parse(content.text).ui, ui, name);
+  for (let call = 0; call < 2; call += 1) {
+    const response = await handlers.callTool({ params: {
+      name: "browser", arguments: { code: "return null", session: "same-session" },
+    } });
+    assert.equal(response.isError, undefined);
+    assert.deepEqual(JSON.parse(response.content[0].text), observation);
   }
-});
-
-test("contentForResult compacts a nested batch receipt's directory without mutating the worker result", async () => {
-  const directory = {
-    controls: [
-      { target: { role: "textbox", name: "City", exact: true }, actions: ["fill", "read"], value: "Oslo" },
-    ],
-    truncated: true,
-  };
-  const receipt = { batch: { protocol: "ui-batch/1", pageUpdated: true }, ui: directory };
-  const [content] = await contentForResult({ ok: true, result: receipt });
-  const presented = JSON.parse(content.text).result;
-  assert.equal(presented.ui, '1. textbox "City" value="Oslo" fill,read\n{"truncated":true}');
-  assert.deepEqual(presented.batch, receipt.batch);
-  // The worker's object keeps its identity and JSON shape.
-  assert.equal(receipt.ui, directory);
-  assert.deepEqual(directory.controls[0], {
-    target: { role: "textbox", name: "City", exact: true },
-    actions: ["fill", "read"],
-    value: "Oslo",
-  });
-});
-
-test("contentForResult compacts a directory returned directly as the result", async () => {
-  const directory = {
-    protocol: "betterwright-ui/1",
-    tool: "browser_batch",
-    controls: [
-      { target: { label: "Search", exact: true }, actions: ["fill", "read"] },
-    ],
-    evidence: [],
-    truncated: false,
-  };
-  const [content] = await contentForResult({ ok: true, result: directory });
-  assert.equal(
-    JSON.parse(content.text).result,
-    '1. label "Search" fill,read\n{"protocol":"betterwright-ui/1","tool":"browser_batch","evidence":[],"truncated":false}',
-  );
-  assert.ok(Array.isArray(directory.controls));
-});
-
-test("MCP suppresses byte-identical pages and warnings on consecutive results", async () => {
-  const makeResult = () => ({
-    ok: true,
-    pages: [{ url: "https://example.com", title: "Example" }],
-    warnings: ["Software WebGL is deprecated"],
-  });
-  const results = [makeResult(), makeResult()];
-  const handlers = _createMcpHandlersForTest({
-    browser: { vault: false, async run() { return results.shift(); } },
-    downloadPolicy: "deny",
-  });
-  const call = () =>
-    handlers.callTool({
-      params: { name: "browser", arguments: { code: "return 1", session: "main" } },
-    });
-  const first = JSON.parse((await call()).content[0].text);
-  assert.deepEqual(first.pages, makeResult().pages);
-  assert.deepEqual(first.warnings, makeResult().warnings);
-  const second = JSON.parse((await call()).content[0].text);
-  assert.equal(Object.hasOwn(second, "pages"), false);
-  assert.equal(Object.hasOwn(second, "warnings"), false);
-  assert.equal(second.pages_unchanged, true);
-  assert.equal(second.warnings_unchanged, true);
-});
-
-test("MCP resumes full pages and warnings emission after a change", async () => {
-  const results = [
-    { ok: true, pages: [{ url: "https://a.example" }], warnings: ["one"] },
-    { ok: true, pages: [{ url: "https://b.example" }], warnings: ["two"] },
-    { ok: true, pages: [{ url: "https://b.example" }], warnings: ["two"] },
-  ];
-  const handlers = _createMcpHandlersForTest({
-    browser: { vault: false, async run() { return results.shift(); } },
-    downloadPolicy: "deny",
-  });
-  const call = () =>
-    handlers.callTool({
-      params: { name: "browser", arguments: { code: "return 1", session: "main" } },
-    });
-  await call();
-  const changed = JSON.parse((await call()).content[0].text);
-  assert.deepEqual(changed.pages, [{ url: "https://b.example" }]);
-  assert.deepEqual(changed.warnings, ["two"]);
-  assert.equal(Object.hasOwn(changed, "pages_unchanged"), false);
-  assert.equal(Object.hasOwn(changed, "warnings_unchanged"), false);
-  const settled = JSON.parse((await call()).content[0].text);
-  assert.equal(settled.pages_unchanged, true);
-  assert.equal(settled.warnings_unchanged, true);
-});
-
-test("MCP result compaction tracks sessions independently", async () => {
-  const makeResult = () => ({
-    ok: true,
-    pages: [{ url: "https://example.com" }],
-    warnings: ["one"],
-  });
-  const handlers = _createMcpHandlersForTest({
-    browser: { vault: false, async run() { return makeResult(); } },
-    downloadPolicy: "deny",
-  });
-  const call = (session) =>
-    handlers.callTool({
-      params: { name: "browser", arguments: { code: "return 1", session } },
-    });
-  const firstA = JSON.parse((await call("a")).content[0].text);
-  const firstB = JSON.parse((await call("b")).content[0].text);
-  assert.deepEqual(firstA.pages, makeResult().pages);
-  assert.deepEqual(firstB.pages, makeResult().pages);
-  assert.deepEqual(firstB.warnings, makeResult().warnings);
-  const secondA = JSON.parse((await call("a")).content[0].text);
-  const secondB = JSON.parse((await call("b")).content[0].text);
-  assert.equal(secondA.pages_unchanged, true);
-  assert.equal(secondB.pages_unchanged, true);
-});
-
-test("contentForResult without a tracker always emits full values", async () => {
-  const makeResult = () => ({
-    ok: true,
-    pages: [{ url: "https://example.com" }],
-    warnings: ["one"],
-  });
-  const [first] = await contentForResult(makeResult());
-  const [second] = await contentForResult(makeResult());
-  assert.equal(second.text, first.text);
-  const summary = JSON.parse(second.text);
-  assert.deepEqual(summary.pages, [{ url: "https://example.com" }]);
-  assert.deepEqual(summary.warnings, ["one"]);
-  assert.equal(Object.hasOwn(summary, "pages_unchanged"), false);
 });
 
 test("liveViewFromEnv defaults to LAN bind and disabled remote exposure", () => {
