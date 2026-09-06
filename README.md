@@ -123,21 +123,31 @@ screenshot, and prints **one JSON object** — answer, steps, token usage,
 proof path.
 
 **Models are selected by real id**, not by adapter nickname. Pass the model
-id you want (`gpt-5.6-sol`, `claude-opus-4-8`, `qwen3:8b`, …). BetterWright
+id you want (`gpt-5.6-sol`, `claude-opus-5`, `qwen3.8:27b`, …). BetterWright
 probes running local servers (Ollama, vLLM), OpenRouter when keyed, and native
 Claude / Codex / Grok routes; if exactly one source exposes that id, it uses
-it. Prefix the source only to pin a collision (`ollama/qwen3:8b`). The words
+it. Prefix the source only to pin a collision (`ollama/qwen3.8:27b`). The words
 `claude`, `codex`, and `grok` alone are **not** model shortcuts.
 
 | You have… | Typical start |
 | --- | --- |
 | ChatGPT / Codex subscription | `betterwright auth --login codex` → `--model gpt-5.6-sol` |
-| Anthropic API key | `ANTHROPIC_API_KEY=…` → `--model claude-opus-4-8` |
-| xAI (OAuth or API key) | `betterwright auth --login grok` or `XAI_API_KEY` → `--model grok-4.3` |
-| Local [Ollama](https://ollama.com) | pull a tool-calling model → `--model qwen3:8b` or `ollama/…` |
+| OpenAI API key with [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) access | `OPENAI_API_KEY=…` → `--model gpt-6-astra --protocol responses` |
+| Anthropic API key | `ANTHROPIC_API_KEY=…` → `--model claude-opus-5` |
+| xAI (OAuth or API key) | `betterwright auth --login grok` or `XAI_API_KEY` → `--model grok-4.6` |
+| Local [Ollama](https://ollama.com) | `ollama pull qwen3.8:27b` → `--model qwen3.8:27b` or `ollama/qwen3.8:27b` |
 | Local vLLM | serve with tool-calling enabled → `--model <id>` or `vllm/<id>` |
 | [OpenRouter](https://openrouter.ai) | `OPENROUTER_API_KEY=…` → `--model <author/model>` |
 | Any OpenAI-compatible `/v1` | `--base-url https://host/v1 --model <id>` |
+
+Examples checked September 2026: [Claude Opus 5 and Sonnet 5](https://platform.claude.com/docs/en/models/overview),
+[Grok 4.6](https://docs.x.ai/developers/models/grok-4.6), and
+[Qwen3.8 27B](https://ollama.com/library/qwen3.8:27b). GPT-5.6 Sol remains the
+subscription quick-start model. For the optional GPT-6 Astra API example,
+tool calling requires `--protocol responses`; see the
+[OpenAI model guide](https://developers.openai.com/api/docs/guides/latest-model).
+The Ollama example downloads
+about 18 GB of model weights; allow additional memory for the context and browser.
 
 ```bash
 # Discover what is available (native defaults + reachable endpoints)
@@ -145,7 +155,12 @@ betterwright models
 betterwright models ollama
 
 # Local Ollama — no API key; default base http://127.0.0.1:11434/v1
-betterwright exec "check example.com" --model ollama/qwen3:8b
+ollama pull qwen3.8:27b
+betterwright exec "check example.com" --model ollama/qwen3.8:27b
+
+# GPT-6 Astra — requires model access and Responses for tool calling
+OPENAI_API_KEY=… betterwright exec "check example.com" \
+  --model gpt-6-astra --protocol responses
 
 # OpenRouter — bare author/model id when unambiguous
 OPENROUTER_API_KEY=… betterwright exec "check example.com" \
