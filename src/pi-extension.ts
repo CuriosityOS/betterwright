@@ -88,7 +88,7 @@ const TOOL_DESCRIPTION =
   "credentials, captcha, human, overlays, controls, media, site, webagents, webmcp. Plan/batch named " +
   "controls/content with getByRole/getByLabel/getByText and auto-waits; read scoped DOM directly " +
   "and snapshot only for unknown structure or locator failure. snapshot({interactive:true}) reads; " +
-  "page.locator('aria-ref=eN') acts; snapshot({ref}) scopes; snapshot({diff:true}) verifies; " +
+  "page.locator('aria-ref=eN') acts; snapshot({ref}) scopes; short URL/locator reads verify; " +
   "screenshot({annotate:true}) boxes refs. Snapshots include iframes/off-screen content — never " +
   "scroll to read or guess refs/URLs. On challenges call captcha.solve(); on processing open the " +
   "numbered crop then captcha.solve({tiles:[indexes]}). On first navigation return page.url() " +

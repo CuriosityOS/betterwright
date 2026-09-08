@@ -60,12 +60,17 @@ export interface SuccessfulRunResult<T = unknown> extends ResultEnvelopeBase {
 export interface FailedRunResult extends ResultEnvelopeBase {
   ok: false;
   error: string;
+  errorCode?: string;
+  /** Cancellation cannot undo effects already committed by the page. */
+  effectMayHaveCommitted?: boolean;
   result?: never;
 }
 
 export type RunResult<T = unknown> = SuccessfulRunResult<T> | FailedRunResult;
 
 export interface RunOptions {
+  /** Abort stops and drains the worker. Other in-flight sessions in that worker also stop. */
+  signal?: AbortSignal;
   session?: string;
   /** Optional host-facing status text. It is never evaluated in the browser sandbox. */
   note?: string;

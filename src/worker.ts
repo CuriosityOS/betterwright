@@ -636,8 +636,8 @@ function sendResult(message) {
     message.events = [];
     message.pages = (message.pages || []).slice(0, 4);
   }
-  // Empty collections carry no information; both clients default them.
-  for (const key of Object.keys(message)) {
+  // Empty results are meaningful. Only omit optional diagnostic collections.
+  for (const key of ["console", "events", "pages", "artifacts", "warnings", "challenges"]) {
     if (Array.isArray(message[key]) && message[key].length === 0)
       delete message[key];
   }
@@ -927,12 +927,12 @@ function lastModelActivityFor(page, origin) {
   );
 }
 
-function disposeVaultCapture() {
+async function disposeVaultCapture() {
   const capture = vaultCapture;
   vaultCapture = null;
   if (capture) {
     try {
-      capture.dispose();
+      await capture.dispose();
     } catch {
       /* teardown must never block launch or shutdown */
     }
@@ -2254,8 +2254,16 @@ async function ensureBrowser(config, { requirePersistentProfile = false } = {}) 
     // The guard proxy only bounds locally launched browsers. A remote CDP
     // browser runs on the provider's side of the WebSocket; its traffic never
     // touches this listener, so it is not even started (see the warnings).
-    if (!remoteCdp) {
+    if (!remoteCdp || launchConfig.hostOwnedTarget) {
       transportProxyPort = await guardProxy.ensure();
+    }
+    if (launchConfig.hostOwnedTarget) {
+      const connection = await rpc("host_connect", { proxyUrl: `socks5://127.0.0.1:${transportProxyPort}` }, null);
+      if (!connection?.cdpUrl) throw new Error("Host target connection failed.");
+      providerPlan = { ...providerPlan, cdpUrl: connection.cdpUrl, headers: connection.headers || {}, warnings: [] };
+      providerWarnings = [];
+      backendSelectionNote = "Host-owned tab: network traffic uses the policy guard; tab lifetime belongs to the host.";
+      redactProviderSecrets(trackSecret, providerPlan);
     }
 
     const headless = launchConfig.headless !== false;
@@ -2366,11 +2374,13 @@ async function ensureBrowser(config, { requirePersistentProfile = false } = {}) 
       try {
         const browser = await chromium.connectOverCDP(
           providerPlan.cdpUrl,
-          Object.keys(providerPlan.headers || {}).length
-            ? { headers: providerPlan.headers }
-            : {},
+          { headers: providerPlan.headers || {}, noDefaults: launchConfig.hostOwnedTarget === true },
         );
         const existing = browser.contexts()[0];
+        if (launchConfig.hostOwnedTarget && (!existing || browser.contexts().length !== 1 || existing.pages().length !== 1)) {
+          await browser.close();
+          throw new Error("Host target must expose exactly one context and one page.");
+        }
         browserContext =
           existing ||
           (await browser.newContext({
@@ -2688,6 +2698,11 @@ function assertPageHandle(value, helper) {
 }
 
 function validateMethodPaths(kind, property, args) {
+  if (launchConfig.hostOwnedTarget &&
+      ((kind === "BrowserContext" && ["newPage", "close"].includes(property)) ||
+       (kind === "Page" && property === "close"))) {
+    throw new Error("Host-owned tabs must be opened or closed by the host.");
+  }
   if (kind === "Page" && property === "pdf" && args[0]?.path)
     assertArtifactWritePath(args[0].path);
   if (
@@ -2703,7 +2718,12 @@ function validateMethodPaths(kind, property, args) {
         : args[1];
     const files = Array.isArray(supplied) ? supplied : [supplied];
     for (const file of files) {
-      if (isString(file)) assertReadableBrowserPath(file);
+      if (launchConfig.hostOwnedTarget) {
+        if (!isString(file) || !launchConfig.hostUploadFiles?.includes(file) ||
+            fs.realpathSync(file) !== file || !fs.statSync(file).isFile()) {
+          throw new Error("Host upload requires an exact approved regular staged file.");
+        }
+      } else if (isString(file)) assertReadableBrowserPath(file);
     }
   }
   if (["Page", "Frame"].includes(kind) && property === "goto") {
@@ -2995,6 +3015,18 @@ function wrap(value, realm) {
           result = setContentCompatible(value, prepared[0], prepared[1]);
         } else {
           result = member.apply(value, prepared);
+        }
+        if (["Keyboard", "Page", "Frame", "Locator"].includes(kind) &&
+            ["press", "pressSequentially", "type", "fill", "down"].includes(property) && result?.catch) {
+          result = result.catch(async (error) => {
+            // A failed chord can skip Playwright's key-up sequence.
+            const target: any = value;
+            const keyboard = kind === "Keyboard" ? target : kind === "Page" ? target.keyboard : target.page().keyboard;
+            for (const key of ["AltLeft", "AltRight", "ControlLeft", "ControlRight", "MetaLeft", "MetaRight", "ShiftLeft", "ShiftRight"]) {
+              await keyboard.up(key).catch(() => {});
+            }
+            throw error;
+          });
         }
         if (
           ["Request", "Response"].includes(kind) &&
@@ -4843,6 +4875,7 @@ function buildSandbox(session, consoleMessages, execution) {
   sandbox.state = session.state;
   sandbox.pages = realm.makePages(getPages);
   sandbox.openPage = realm.safeFunction(async (url = null, options: any = {}) => {
+    if (launchConfig.hostOwnedTarget) throw new Error("Open another tab through the host.");
     if (session.pages.size >= MAX_PAGES_PER_SESSION) {
       throw new Error(
         `Browser page limit (${MAX_PAGES_PER_SESSION}) reached for this session.`,
@@ -4874,6 +4907,7 @@ function buildSandbox(session, consoleMessages, execution) {
     return wrap(entry[1], realm);
   });
   sandbox.closePage = realm.safeFunction(async (selector) => {
+    if (launchConfig.hostOwnedTarget) throw new Error("Close this tab through the host.");
     const target = selector === undefined ? session.currentId : selector;
     assertPageHandle(target, "closePage");
     const entries = [...session.pages.entries()];
@@ -8253,9 +8287,10 @@ async function performShutdown() {
     /* parent/process exit */
   }
   await closeDownloadGuard();
-  disposeVaultCapture();
+  await disposeVaultCapture();
   try {
-    await browserContext?.close();
+    if (launchConfig?.hostOwnedTarget) await browserContext?.browser()?.close();
+    else await browserContext?.close();
   } catch {
     /* parent/process exit */
   }

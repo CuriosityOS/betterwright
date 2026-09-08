@@ -107,7 +107,7 @@ export type CookieSyncResult =
       warnings?: CookieSyncWarning[];
       profileMode?: "persistent" | "ephemeral";
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; cookieReaderCode?: string; cookiePermissionDenied?: boolean; cookieReaderStage?: string };
 
 export interface CookieSourceBrowser {
   id: string;
@@ -122,6 +122,10 @@ export interface CookieSourceProfile {
 }
 
 export interface BetterWrightOptions {
+  /** Trusted single-tab adapter. Network guard setup is mandatory; model credential writes are disabled. */
+  hostTarget?: import("./host.js").HostTarget;
+  /** Exact staged files a trusted host authorizes for upload. Requires hostTarget. */
+  hostUploadFiles?: readonly string[];
   home?: string;  /**
    * Named persistent browser profile inside the home: a separate identity,
    * with its own cookie jar, its own profile lock, and its own session daemon,

@@ -9,6 +9,10 @@ test("default prompt is permissive", () => {
   // Qwen 3.8 Max's winning prompt variant cut total task tokens by 23.1%.
   // Preserve that gain: critical behavior belongs below, not in explanation.
   assert.ok(prompt.length < 4_200, `default prompt grew to ${prompt.length} characters`);
+  assert.ok(compact.includes("discover missing tool names once"));
+  assert.ok(compact.includes("Print one result representation"));
+  assert.ok(compact.includes("never conflicting same-tab actions"));
+  assert.ok(compact.includes("not bare getByRole or page.snapshot()"));
   assert.ok(compact.includes("request authorizes ordinary steps"));
   assert.ok(compact.includes("Do not add confirmation or refuse them"));
   assert.ok(compact.includes("Plan then batch"));

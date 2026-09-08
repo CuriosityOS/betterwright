@@ -9,6 +9,23 @@ Releases before 1.1.3 predate this file; their notes live on the
 
 ## [Unreleased]
 
+### Added
+
+- Optional `betterwright/electron` adapter for a host-owned tab, with scoped
+  transport, network policy enforcement, cancellation, native input and clipboard,
+  approved file uploads, and disconnect without closing the tab.
+- `betterwright/capture` for host-native save prompts and awaitable capture cleanup.
+- Host-provided vault encryption keys and explicit captured-secret redaction.
+- Isolated Electron and packaged-ASAR end-to-end fixtures.
+
+### Fixed
+
+- Empty array results are preserved instead of being dropped as empty diagnostics.
+- Failed keyboard chords release modifiers before the next action.
+- Cookie import errors expose safe permission and failure-stage diagnostics.
+- Browser guidance avoids repeated discovery, duplicate output and unnecessary
+  snapshots while retaining batching and the existing context-size limits.
+
 ## [2.4.0] - 2026-09-06
 
 ### Added
