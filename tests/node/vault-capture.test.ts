@@ -447,7 +447,7 @@ test("an expired prompt cannot save afterwards", async () => {
 test("dispose detaches sessions and ignores later events", async () => {
   const harness = makeHarness({ headed: true, modelAt: () => Date.now() });
   const session = await attached(harness);
-  harness.handle.dispose();
+  await harness.handle.dispose();
   assert.equal(session.detached, true);
   emitCapture(session);
   emitNavigation(session, `${ORIGIN}/home`);
@@ -483,6 +483,63 @@ test("httpOrigin accepts only parseable http(s) URLs (shared with the worker)", 
   assert.equal(httpOrigin(""), "");
   assert.equal(httpOrigin(null), "");
   assert.equal(httpOrigin(undefined), "");
+});
+
+test("capture disposal waits for an in-flight attachment and is idempotent", async () => {
+  const page = new FakePage({ frame: { id: "frame-1", url: LOGIN_URL } });
+  const context = new FakeContext([page]);
+  const cdp = new FakeCDPSession(page);
+  let release: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  context.newCDPSession = async () => { await gate; return cdp; };
+  const handle = installVaultCapture(context, {});
+  const disposing = handle.dispose();
+  assert.equal(handle.dispose(), disposing);
+  release();
+  await disposing;
+  assert.equal(cdp.detached, true);
+  assert.equal(cdp.evaluateCalls.length, 0);
+  assert.equal(context.listenerCount("page"), 0);
+});
+
+test("native save prompts receive metadata only and cannot save after disposal", async () => {
+  const harness = makeHarness({ headed: true, modelAt: 0 });
+  await harness.handle.dispose();
+  let answer: (choice: string) => void;
+  let request;
+  const ready = new Promise<void>(resolve => {
+    harness.handle = installVaultCapture(harness.context, {
+      ...harness.deps,
+      onReady: resolve,
+      requestSave: metadata => { request = metadata; return new Promise<string>(resolveChoice => { answer = resolveChoice; }); },
+    });
+  });
+  await ready;
+  const session = harness.context.sessions.get(harness.page);
+  emitCapture(session);
+  emitNavigation(session, `${ORIGIN}/home`);
+  assert.equal(await waitFor(() => Boolean(request)), true);
+  assert.deepEqual(Object.keys(request).sort(), ["mode", "origin", "page", "username"]);
+  assert.equal(harness.handle.isBusy(harness.page), true);
+  await harness.handle.dispose();
+  answer("save");
+  await tick();
+  assert.equal(vaultSaves(harness.calls).length, 0);
+});
+
+test("disposal removes the installed sensor and suppresses a pending save", async () => {
+  const harness = makeHarness({ modelAt: () => Date.now() });
+  const cdp = await attached(harness);
+  const commands: string[] = [];
+  const send = cdp.send.bind(cdp);
+  cdp.send = async (method, params) => { commands.push(method); return send(method, params); };
+  emitCapture(cdp);
+  await harness.handle.dispose();
+  assert.ok(commands.includes("Page.removeScriptToEvaluateOnNewDocument"));
+  assert.ok(cdp.evaluateCalls.some(call => call.expression === "globalThis.__bwVaultDispose?.()"));
+  emitNavigation(cdp, `${ORIGIN}/home`);
+  await tick(100);
+  assert.equal(vaultSaves(harness.calls).length, 0);
 });
 
 // `generateAndFill` types its generated secret into the page, so the sensor

@@ -23,6 +23,8 @@ export type VaultJsonValue =
   | { [key: string]: VaultJsonValue };
 
 export interface LocalCredentialVaultOptions {
+  /** Host-owned encryption key. Return fresh 32-byte storage; the vault zeroes it. */
+  keyProvider?: () => Promise<Uint8Array>;
   /** Exact vault directory. Takes precedence over `home`. */
   dir?: string;
   /** BetterWright home directory; the vault is stored in its `vault` child. */
@@ -150,6 +152,8 @@ export class LocalCredentialVault {
 
   /** Return a cloned value with every active secret replaced. */
   redact<T>(value: T): T;
+  /** Keep host-captured credentials redacted for as long as their pages remain alive. */
+  trackRedactionSecret(value: string): void;
 
   /** Clear tracked material after every page in the owning worker is closed. */
   resetRedactionSecrets(): void;

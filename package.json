@@ -6,6 +6,16 @@
   "main": "dist/src/index.js",
   "types": "types/index.d.ts",
   "exports": {
+    "./capture": {
+      "types": "./types/capture.d.ts",
+      "import": "./dist/src/vault-capture.js",
+      "default": "./dist/src/vault-capture.js"
+    },
+    "./electron": {
+      "types": "./types/electron.d.ts",
+      "import": "./dist/src/electron.js",
+      "default": "./dist/src/electron.js"
+    },
     ".": {
       "types": "./types/index.d.ts",
       "import": "./dist/src/index.js",
@@ -97,6 +107,8 @@
     "test": "bun run build:harness && bun scripts/run-unit-tests.ts --all",
     "test:unit": "bun run build:harness && bun scripts/run-unit-tests.ts",
     "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
+    "test:electron": "bun run build && electron tests/electron/reliability.mjs",
+    "test:electron:packaged": "bun run build && bun tests/electron/package.mjs && electron .tmp/electron-e2e/app.asar",
     "lint": "biome ci src bin scripts research tests benchmarks examples && oxlint",
     "check:versions": "bun scripts/check-versions.ts",
     "check:package": "bun run build && bun scripts/check-package.ts",
@@ -121,10 +133,12 @@
     "tldts": "7.4.9"
   },
   "peerDependencies": {
+    "electron": ">=43.4.1",
     "@anthropic-ai/sdk": ">=0.30.0",
     "@modelcontextprotocol/sdk": ">=1.13.0"
   },
   "peerDependenciesMeta": {
+    "electron": { "optional": true },
     "@anthropic-ai/sdk": {
       "optional": true
     },
@@ -155,6 +169,9 @@
   },
   "homepage": "https://github.com/BetterWright/betterwright#readme",
   "devDependencies": {
+    "@electron/asar": "4.3.0",
+    "electron": "43.4.1",
+    "@types/ws": "8.5.13",
     "@biomejs/biome": "^2.5.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@oxlint/plugins": "^1.78.0",
@@ -163,6 +180,7 @@
     "typescript": "^7.0.2"
   },
   "optionalDependencies": {
+    "ws": "8.21.0",
     "patchright-core": "1.61.1",
     "rookie-cookies": "0.6.0"
   }

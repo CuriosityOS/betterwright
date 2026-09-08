@@ -23,6 +23,7 @@
   const PROMPT_TIMEOUT_MS = 30_000;
   const CLEAR_WATCH_MS = 10_000;
   const DUPLICATE_CAPTURE_MS = 1_500;
+  const lifecycle = new AbortController();
 
   // Mirrors UntrustedValue in untrusted-value.ts: this sensor compiles to a
   // self-contained page script, so it cannot import the shared contract.
@@ -37,6 +38,7 @@
     const encoded = JSON.stringify(payload);
     let attempts = 0;
     const deliver = () => {
+      if (lifecycle.signal.aborted) return;
       try {
         const binding = globalThis[BINDING_NAME];
         if (isEventBinding(binding)) {
@@ -152,7 +154,7 @@
   };
 
   // A real navigation must not look like "the app unmounted the form".
-  addEventListener("pagehide", () => stopClearWatch(), true);
+  addEventListener("pagehide", () => stopClearWatch(), { capture: true, signal: lifecycle.signal });
 
   // Report whether this document still shows a password form. The worker uses
   // it to confirm a post-submit navigation: a page that lands back on a
@@ -174,6 +176,7 @@
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", reportPasswordFormScan, {
+      signal: lifecycle.signal,
       once: true,
     });
   } else {
@@ -247,7 +250,7 @@
       const field = passwordFieldFor(event.target);
       if (field) capture(field);
     },
-    true,
+    { capture: true, signal: lifecycle.signal },
   );
   document.addEventListener(
     "click",
@@ -256,7 +259,7 @@
       const field = passwordFieldFor(event.target);
       if (field) capture(field);
     },
-    true,
+    { capture: true, signal: lifecycle.signal },
   );
 
   // --- save prompt ---------------------------------------------------------
@@ -372,5 +375,15 @@
     if (activePrompt && activePrompt.promptId === String(promptId || "")) {
       removePrompt();
     }
+  };
+  globalThis.__bwVaultDispose = () => {
+    lifecycle.abort();
+    stopClearWatch();
+    removePrompt();
+    lastCapture = { field: null, password: "", at: 0 };
+    delete globalThis.__bwVaultSensorInstalled;
+    delete globalThis.__bwVaultShowPrompt;
+    delete globalThis.__bwVaultDismissPrompt;
+    delete globalThis.__bwVaultDispose;
   };
 })();

@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import type { HostConnection, HostTarget } from "../types/host.js";
 // The published declarations are hand-written (see AGENTS.md). Typing the
 // implementation against them turns a drift between the two into a compile
 // error instead of something only a consumer would notice.
@@ -303,6 +304,9 @@ export class BetterWright {
   declare credentialCapture: boolean;
   declare browserFlavor: "chromium-fork";
   declare provider: any;
+  declare hostTarget: HostTarget | undefined;
+  declare hostUploadFiles: readonly string[];
+  private readonly hostConnections = new WeakMap<object, HostConnection>();
   declare headless: boolean;
   declare searchMinIntervalMs: number;
   declare publicSearchPolicy: "block" | "allow";
@@ -452,6 +456,14 @@ export class BetterWright {
    *   machine on the network. Pass `{host:"127.0.0.1"}` for loopback-only.
    */
   constructor(options: BetterWrightOptions = {}) {
+    this.hostTarget = options.hostTarget;
+    this.hostUploadFiles = options.hostUploadFiles ?? [];
+    if (this.hostTarget && (!isCallable(this.hostTarget.connect) || options.provider != null)) {
+      throw new TypeError("hostTarget requires connect() and cannot be combined with provider.");
+    }
+    if (!Array.isArray(this.hostUploadFiles) || this.hostUploadFiles.some(file => !isString(file) || !path.isAbsolute(file)) || (this.hostUploadFiles.length && !this.hostTarget)) {
+      throw new TypeError("Host uploads require hostTarget and absolute staged paths.");
+    }
     this.home = options.home || defaultHome();
     // null == the historical `browser/profile`. A validated name scopes the
     // profile directory and, through it, the profile lock — nothing else.
@@ -579,7 +591,9 @@ export class BetterWright {
       artifactsDir: artifacts,
       downloadsDir: downloads,
       browserFlavor: this.browserFlavor,
-      provider: this.provider,
+      provider: this.hostTarget ? { cdpUrl: "ws://127.0.0.1:1" } : this.provider,
+      hostOwnedTarget: Boolean(this.hostTarget),
+      hostUploadFiles: this.hostUploadFiles,
       stealthRuntimeFix: this.stealthRuntimeFix,
       launchIdentity: this.launchIdentity,
       fingerprintNoise: this.fingerprintNoise,
@@ -593,10 +607,10 @@ export class BetterWright {
       parkBackgroundPages: this.parkBackgroundPages,
       headless: this.headless,
       adBlock: this.adBlock,
-      credentialCapture: this.credentialCapture,
+      credentialCapture: this.hostTarget ? false : this.credentialCapture,
       searchMinIntervalMs: this.searchMinIntervalMs,
       publicSearchPolicy: this.publicSearchPolicy,
-      downloadPolicy: this.downloadPolicy,
+      downloadPolicy: this.hostTarget ? "deny" : this.downloadPolicy,
       outputLimit: 12_000,
       maxArtifactBytes: 100 * 1024 * 1024,
       maxDownloadBytes: 50 * 1024 * 1024,
@@ -626,6 +640,7 @@ export class BetterWright {
       ...process.env,
       NODE_NO_WARNINGS: "1",
     };
+    if (process.versions.electron) env.ELECTRON_RUN_AS_NODE = "1";
     // Playwright's pw:protocol debug scope logs complete CDP payloads. The
     // worker handles cookies and vault fills, so host DEBUG settings must not
     // turn its stderr into a secret side channel.
@@ -661,7 +676,7 @@ export class BetterWright {
       process.execPath,
       [...bunInheritedExecArgv(env), ...execArgv, WORKER_PATH],
       {
-      cwd: path.dirname(WORKER_PATH),
+      cwd: process.versions.electron ? this._workerConfig().runtimeDir : path.dirname(WORKER_PATH),
       stdio: ["pipe", "pipe", "pipe"],
       env,
     });
@@ -761,6 +776,8 @@ export class BetterWright {
           }
         } finally {
           clearTimeout(drainTimer);
+          await this.hostConnections.get(child)?.close().catch(() => {});
+          this.hostConnections.delete(child);
           await this._resetVaultRedactionForWorker(child);
           resolveWorkerClose();
           // Unexpected death (crash, OOM-kill) while a live view is up:
@@ -852,6 +869,7 @@ export class BetterWright {
     // pending until this hook settles, so a replacement cannot claim ownership
     // while an older generation's asynchronous reset is still running.
     this._vaultRedactionOwner = null;
+    if (this.hostTarget) return;
     try {
       await this.vault?.resetRedactionSecrets?.();
     } catch {
@@ -895,7 +913,18 @@ export class BetterWright {
     try {
       const payload = message.payload || {};
       let result;
-      if (message.method === "guard") {
+      if (message.method === "host_connect") {
+        if (!this.hostTarget || this.hostConnections.has(child)) throw new Error("Host target unavailable.");
+        const proxyUrl = String(payload.proxyUrl || "");
+        if (!/^socks5:\/\/127\.0\.0\.1:[1-9][0-9]*$/.test(proxyUrl)) throw new Error("Invalid host guard endpoint.");
+        const connection = await this.hostTarget.connect({ proxyUrl });
+        if (child.exitCode !== null || child.signalCode !== null || this._process !== child) {
+          await connection.close();
+          throw new Error("Host worker stopped during connection.");
+        }
+        this.hostConnections.set(child, connection);
+        result = connection.provider;
+      } else if (message.method === "guard") {
         const { url, ...details } = payload;
         // Copy rather than annotate: policy.check may return a shared or frozen
         // object, and `cacheable` is an envelope field, not part of the public
@@ -908,6 +937,9 @@ export class BetterWright {
               "or use an unlocked password-manager extension's autofill instead.",
           );
         const action = String(payload.action || "");
+        if (this.hostTarget && !["list", "list-pending"].includes(action)) {
+          throw new Error("Host-owned browser credential access is metadata-only.");
+        }
         const requestPayload = { ...(payload.payload || {}) };
         if (
           action === "generate" &&
@@ -1089,6 +1121,13 @@ export class BetterWright {
    * @param {object} [options] { session, note, timeout, approvedDownloads }
    */
   run(code, options: any = {}) {
+    if (this.hostTarget) return this._enqueueExclusive(() => {
+      const execute = (signal?: AbortSignal) => this._runNow(code, {
+        ...options,
+        signal: signal && options.signal ? AbortSignal.any([signal, options.signal]) : signal ?? options.signal,
+      });
+      return this.hostTarget.run ? this.hostTarget.run(execute) : execute();
+    });
     return this._enqueue(options?.session, () => this._runNow(code, options));
   }
 
@@ -1160,7 +1199,13 @@ export class BetterWright {
     try {
       extracted = await this._extractCookieSync(normalized);
     } catch (error) {
-      return { ok: false, error: String(error?.message || error) };
+      return {
+        ok: false,
+        error: "Cookie Sync could not read the selected local browser profile.",
+        cookieReaderCode: error?.cookieReaderCode || "reader_unavailable",
+        cookiePermissionDenied: error?.cookiePermissionDenied === true,
+        cookieReaderStage: error?.cookieReaderStage,
+      };
     }
     if (!extracted.cookies.length) {
       return {
@@ -1315,6 +1360,7 @@ export class BetterWright {
   }
 
   async _runNow(code, options) {
+    if (options.signal?.aborted) return { ok: false, error: "Browser operation aborted.", errorCode: "BW_ABORTED", effectMayHaveCommitted: false };
     if (!isString(code) || !code.trim())
       return { ok: false, error: "code must be a non-empty string" };
     const timeoutSeconds = Math.max(Number(options.timeout) || this.defaultTimeout, 5);
@@ -1329,6 +1375,7 @@ export class BetterWright {
         config,
       },
       timeoutSeconds,
+      options.signal,
     );
   }
 
@@ -1568,21 +1615,34 @@ export class BetterWright {
   /** Send one worker command keyed by a fresh id and await its result envelope,
    * restarting the worker on timeout and applying vault redaction on the way
    * out. Shared by run() and fillCredential(). */
-  async _dispatch(message, timeoutSeconds): Promise<any> {
+  async _dispatch(message, timeoutSeconds, signal?: AbortSignal): Promise<any> {
+    if (signal?.aborted) return { ok: false, error: "Browser operation aborted.", errorCode: "BW_ABORTED", effectMayHaveCommitted: false };
     this._dispatchSeq += 1;
     const id = `${process.pid}-${this._dispatchSeq}`;
     const child = this._process;
     const response: any = await new Promise<any>((resolve) => {
       let settled = false;
       let timer;
+      let aborting = false;
+      const onAbort = () => {
+        aborting = true;
+        clearTimeout(timer);
+        void this.close({ child, restart: true }).then(() => {
+          done({ ok: false, error: "Browser operation aborted.", errorCode: "BW_ABORTED", effectMayHaveCommitted: true });
+        }, () => {
+          done({ ok: false, error: "Browser operation aborted; teardown failed.", errorCode: "BW_ABORT_TEARDOWN_FAILED", effectMayHaveCommitted: true });
+        });
+      };
       const done = (result) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
         this._pending.delete(id);
         resolve(result);
       };
-      this._pending.set(id, { child, done });
+      this._pending.set(id, { child, done: (result) => { if (!aborting) done(result); } });
+      signal?.addEventListener("abort", onAbort, { once: true });
       timer = setTimeout(async () => {
         await this.close({ child, preservePending: true, restart: true });
         this._scheduleLiveViewRevival();

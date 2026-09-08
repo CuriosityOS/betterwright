@@ -100,6 +100,8 @@ export function installVaultCapture(context, deps: any = {}) {
     framesByPage: new Map(), // page -> Map<frameId, {contextId, url}>
     pendingByPage: new Map(), // page -> Map<frameId, capture>
     prompts: new Map(), // promptId -> {page, frameId, capture, timer}
+    scriptByPage: new Map(),
+    attaching: new Set<Promise<void>>(),
   };
 
   const fail = (error) => {
@@ -144,7 +146,7 @@ export function installVaultCapture(context, deps: any = {}) {
         username: capture.username,
         password: capture.password,
         label: hostLabel(capture.origin),
-        matchMode: "base-domain",
+        matchMode: deps.matchMode || "base-domain",
         deferToPending: true,
       });
     } catch (error) {
@@ -173,6 +175,22 @@ export function installVaultCapture(context, deps: any = {}) {
   }
 
   async function showPrompt(page, frameId, capture, mode) {
+    if (state.disposed || page.isClosed()) return;
+    if (deps.requestSave) {
+      const promptId = crypto.randomUUID();
+      const timer = setTimeout(() => dropPrompt(promptId, false), timings.promptTtlMs);
+      state.prompts.set(promptId, { page, frameId, capture, timer });
+      try {
+        const choice = await deps.requestSave({ page, origin: capture.origin, username: capture.username, mode });
+        if (state.disposed || page.isClosed() || !state.prompts.has(promptId)) return;
+        if (choice === "save") await saveCapture(capture);
+        else if (choice === "never") {
+          neverOrigins.add(capture.origin);
+          if (deps.prefsPath) saveNeverOrigins(deps.prefsPath, neverOrigins);
+        }
+      } finally { dropPrompt(promptId, false); }
+      return;
+    }
     const frames = state.framesByPage.get(page);
     const frame = frames?.get(frameId);
     if (!frame) return;
@@ -199,13 +217,21 @@ export function installVaultCapture(context, deps: any = {}) {
       .catch(() => dropPrompt(promptId, false));
   }
 
-  async function resolveCapture(page, frameId) {
+  function resolveCapture(page, frameId) {
+    return resolveCaptureInner(page, frameId).catch(error => {
+      if (!state.disposed && !page.isClosed()) fail(error);
+    });
+  }
+
+  async function resolveCaptureInner(page, frameId) {
     const pendings = state.pendingByPage.get(page);
     const capture = pendings?.get(frameId);
     if (!capture) return;
     pendings.delete(frameId);
     clearTimeout(capture.timer);
     if (neverOrigins.has(capture.origin)) return;
+    if (deps.shouldCapture && !await deps.shouldCapture(capture)) return;
+    if (state.disposed) return;
 
     const lastModelAt = deps.lastModelActivity(page, capture.origin);
     if (
@@ -333,6 +359,10 @@ export function installVaultCapture(context, deps: any = {}) {
     } catch {
       return;
     }
+    if (state.disposed || page.isClosed()) {
+      await cdp.detach().catch(() => {});
+      return;
+    }
     state.cdpByPage.set(page, cdp);
     state.framesByPage.set(page, new Map());
     state.pendingByPage.set(page, new Map());
@@ -384,44 +414,66 @@ export function installVaultCapture(context, deps: any = {}) {
     try {
       await cdp.send("Page.enable");
       await cdp.send("Runtime.enable");
-      await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+      const script = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
         source: SENSOR_SOURCE,
         worldName: WORLD_NAME,
         runImmediately: true,
       });
+      state.scriptByPage.set(page, script.identifier);
+      if (state.disposed || page.isClosed()) await detachPage(page);
+      else deps.onReady?.();
     } catch (error) {
       fail(error);
     }
   }
 
-  function detachPage(page) {
+  async function detachPage(page) {
     const pendings = state.pendingByPage.get(page);
     if (pendings) {
       for (const capture of pendings.values()) clearTimeout(capture.timer);
     }
     state.pendingByPage.delete(page);
+    const frames = state.framesByPage.get(page);
     state.framesByPage.delete(page);
     for (const [promptId, prompt] of [...state.prompts]) {
       if (prompt.page === page) dropPrompt(promptId, false);
     }
     const cdp = state.cdpByPage.get(page);
     state.cdpByPage.delete(page);
-    if (cdp) void cdp.detach().catch(() => {});
+    if (cdp) {
+      const script = state.scriptByPage.get(page);
+      state.scriptByPage.delete(page);
+      if (script) await cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }).catch(() => {});
+      for (const frame of frames?.values() || []) {
+        if (frame.contextId) await cdp.send("Runtime.evaluate", {
+          expression: "globalThis.__bwVaultDispose?.()", contextId: frame.contextId,
+        }).catch(() => {});
+      }
+      await cdp.detach().catch(() => {});
+    }
   }
 
-  const onPage = (page) => void attachPage(page);
+  const onPage = (page) => {
+    const operation = attachPage(page).catch(fail).finally(() => state.attaching.delete(operation));
+    state.attaching.add(operation);
+  };
   context.on("page", onPage);
-  for (const page of context.pages()) void attachPage(page);
+  for (const page of context.pages()) onPage(page);
 
+  let disposal: Promise<void> | undefined;
   return {
     dispose() {
-      if (state.disposed) return;
+      if (disposal) return disposal;
       state.disposed = true;
       context.off("page", onPage);
-      for (const page of [...state.cdpByPage.keys()]) detachPage(page);
+      disposal = (async () => {
+      await Promise.all([...state.attaching]);
+      for (const page of [...state.cdpByPage.keys()]) await detachPage(page);
       for (const promptId of [...state.prompts.keys()]) {
         dropPrompt(promptId, false);
       }
+      })();
+      return disposal;
     },
     /**
      * Whether this page has credential work in flight: a captured password

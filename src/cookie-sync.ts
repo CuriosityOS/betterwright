@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { domainToASCII } from "node:url";
+import { cookieReaderError } from "./cookie-reader-error.js";
 
 import {
   isBoolean,
@@ -554,10 +555,8 @@ export async function extractCookieSync(
   if (options.source.profile) readOptions.profile = options.source.profile;
   try {
     snapshot = await reader.read(readOptions);
-  } catch {
-    throw new Error(
-      "Cookie Sync could not read the selected local browser profile. Check the browser id, profile, permissions, and platform support.",
-    );
+  } catch (cause) {
+    throw await cookieReaderError(cause, reader, readOptions);
   }
   return normalizeCookieSnapshot(snapshot, options);
 }

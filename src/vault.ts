@@ -1304,19 +1304,27 @@ function emptySnapshot() {
   return { version: SNAPSHOT_VERSION, revision: 0, records: [], pending: [] };
 }
 
-async function loadKeyAndSnapshot(paths) {
+async function loadKeyAndSnapshot(paths, keyProvider?) {
   const [keyStats, dataStats] = await Promise.all([
     regularFileStats(paths.key, { missing: true }),
     regularFileStats(paths.data, { missing: true }),
   ]);
-  if (!keyStats && dataStats) {
+  if (!keyProvider && !keyStats && dataStats) {
     throw vaultError(
       "Credential vault key is missing; refusing to replace it while ciphertext exists.",
       "VAULT_KEY_MISSING",
     );
   }
   let key;
-  if (keyStats) {
+  if (keyProvider) {
+    const supplied = await keyProvider();
+    if (!(supplied instanceof Uint8Array) || supplied.length !== KEY_BYTES) {
+      if (supplied instanceof Uint8Array) supplied.fill(0);
+      throw vaultError("Host vault key is invalid.", "VAULT_KEY_INVALID");
+    }
+    // Share the caller's fresh storage so every success/error cleanup zeroes it.
+    key = Buffer.from(supplied.buffer, supplied.byteOffset, supplied.byteLength);
+  } else if (keyStats) {
     key = await readBoundedFile(paths.key, KEY_BYTES, "Credential vault key");
     if (key.length !== KEY_BYTES) {
       key.fill(0);
@@ -1326,17 +1334,22 @@ async function loadKeyAndSnapshot(paths) {
     key = randomBytes(KEY_BYTES);
     await atomicWrite(paths.key, key);
   }
-  if (!dataStats) {
-    const snapshot = emptySnapshot();
-    await atomicWrite(paths.data, encodeEnvelope(snapshot, key));
-    return { key, snapshot };
+  try {
+    if (!dataStats) {
+      const snapshot = emptySnapshot();
+      await atomicWrite(paths.data, encodeEnvelope(snapshot, key));
+      return { key, snapshot };
+    }
+    const contents = await readBoundedFile(
+      paths.data,
+      MAX_CIPHERTEXT_FILE_BYTES,
+      "Credential vault ciphertext",
+    );
+    return { key, snapshot: decodeEnvelope(contents, key) };
+  } catch (error) {
+    key.fill(0);
+    throw error;
   }
-  const contents = await readBoundedFile(
-    paths.data,
-    MAX_CIPHERTEXT_FILE_BYTES,
-    "Credential vault ciphertext",
-  );
-  return { key, snapshot: decodeEnvelope(contents, key) };
 }
 
 async function persistSnapshot(paths, key, snapshot) {
@@ -1404,9 +1417,14 @@ export class LocalCredentialVault {
   declare pendingTtlMs: number;
   declare lockTimeoutMs: number;
   declare staleLockMs: number;
+  declare keyProvider: (() => Promise<Uint8Array>) | undefined;
 
   constructor(options: any = {}) {
     const resolved = normalizeOptions(options);
+    if (resolved.keyProvider != null && !isCallable(resolved.keyProvider)) {
+      throw new TypeError("keyProvider must be a function.");
+    }
+    this.keyProvider = resolved.keyProvider;
     // Behavior note: the fallback used to hard-code ~/.betterwright, ignoring
     // BETTERWRIGHT_HOME. It now uses the shared defaultHome() so a vault
     // constructed without dir/home lands in the same home directory as every
@@ -2007,7 +2025,7 @@ export class LocalCredentialVault {
   }
 
   async #dispatch(action, payload, target) {
-    const { key, snapshot } = await loadKeyAndSnapshot(this.paths);
+    const { key, snapshot } = await loadKeyAndSnapshot(this.paths, this.keyProvider);
     try {
       if (action === "list") return await this.#list(snapshot, payload, target);
       if (action === "list-pending") {
@@ -2079,7 +2097,12 @@ export class LocalCredentialVault {
     return redactSecretsDeep(value, this.#activeSecrets);
   }
 
-  /** Clear redaction material only after the owning browser worker is closed. */
+  /** Register secrets captured by a trusted host for output redaction. */
+  trackRedactionSecret(value: string): void {
+    this.#trackSecret(value);
+  }
+
+  /** Clear redaction material only after all owning browser pages are closed. */
   resetRedactionSecrets() {
     this.#activeSecrets.clear();
   }
@@ -2105,7 +2128,7 @@ export class LocalCredentialVault {
    */
   async #readSnapshot() {
     if (!(await pathExists(this.paths.data))) return null;
-    const { key, snapshot } = await loadKeyAndSnapshot(this.paths);
+    const { key, snapshot } = await loadKeyAndSnapshot(this.paths, this.keyProvider);
     key.fill(0);
     return snapshot;
   }
@@ -2218,7 +2241,7 @@ export class LocalCredentialVault {
         if (!(await pathExists(this.paths.data))) {
           throw vaultError("No credential vault exists yet.", "NOT_FOUND");
         }
-        const { key, snapshot } = await loadKeyAndSnapshot(this.paths);
+        const { key, snapshot } = await loadKeyAndSnapshot(this.paths, this.keyProvider);
         try {
           const index = snapshot.records.findIndex((candidate) => candidate.id === wanted);
           const pendingIndex =

@@ -28,6 +28,16 @@ import {
   type SessionRecordingStatus,
   type VaultMatchMode,
 } from "betterwright";
+import { type CaptureOptions, installVaultCapture } from "betterwright/capture";
+import { configureElectronNetwork, createElectronHostTarget, type ElectronHostOptions } from "betterwright/electron";
+
+const electronNetworkSetup: () => void = configureElectronNetwork;
+const electronTargetFactory: (options: ElectronHostOptions) => NonNullable<BetterWrightOptions["hostTarget"]> = createElectronHostTarget;
+const captureInstaller: (context: Parameters<typeof installVaultCapture>[0], options: CaptureOptions) => { dispose(): Promise<void> } = installVaultCapture;
+void electronNetworkSetup;
+void electronTargetFactory;
+void captureInstaller;
+
 import {
   type AgentMessage,
   type AgentModel,

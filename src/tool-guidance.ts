@@ -1,0 +1,2 @@
+// Shared by the built-in agent and external MCP hosts.
+export const BROWSER_TOOL_GUIDANCE = "Use known tools; discover missing tool names once. Print one result representation, not duplicate structured/text output; forward images, not base64. Batch known steps; parallelize independent work, never conflicting same-tab actions. Use page.getByRole/page.getByLabel and snapshot(), not bare getByRole or page.snapshot().";

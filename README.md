@@ -36,6 +36,9 @@ don't re-pay login and navigation cost every step.
 
 ## Two ways to use it
 
+Embedding a browser in a desktop app? See the optional
+[Electron host adapter](docs/electron-host.md).
+
 |  | You want… | You get… |
 | --- | --- | --- |
 | **[Integrated](#1-integrated--your-agent-drives-the-browser)** | your agent (Claude Code, Codex, Pi, any MCP client, your own code) to browse as one part of a bigger job | a skill, MCP server, or JS API through which *your* agent mans the browser step by step |
